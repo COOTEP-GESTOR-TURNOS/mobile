@@ -1,0 +1,37 @@
+# Dependencias
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Nativo (se genera con expo prebuild)
+/ios
+/android
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Metro
+.metro-health-check*
+
+# Registros
+npm-debug.*
+
+# Variables locales
+.env
+.env*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

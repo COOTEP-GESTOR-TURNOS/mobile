@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "COOTEP Turno",
+    "slug": "cootep-turno",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "cootepturno",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "co.cootep.turno"
+    },
+    "android": {
+      "package": "co.cootep.turno",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F6E56",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ]
+  }
+}
