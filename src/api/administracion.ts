@@ -15,12 +15,6 @@ export interface FichaUsuario {
   roles: AsignacionGuardada[];
 }
 
-export interface AgenciaCatalogo {
-  id: string;
-  nombre: string;
-  servicios: { id: string; nombre: string }[];
-}
-
 export const NOMBRE_ROL: Record<Rol, string> = {
   SUPERADMIN: 'Superadministrador',
   ADMIN_AGENCIA: 'Administrador de agencia',
@@ -28,9 +22,8 @@ export const NOMBRE_ROL: Record<Rol, string> = {
   ASOCIADO: 'Asociado',
 };
 
-/** Los mismos endpoints que usa el panel web de administración (RF-18). */
+/** Los mismos endpoints que usa el panel web de administración (RF-18). El catálogo está en catalogo.ts. */
 export const administracionApi = {
-  agencias: () => pedir<AgenciaCatalogo[]>('GET', '/agencias'),
   listar: (texto: string) =>
     pedir<{ elementos: FichaUsuario[]; total: number }>('GET', `/admin/usuarios?tamano=30${texto ? `&texto=${encodeURIComponent(texto)}` : ''}`),
   crear: (datos: { email: string; nombre: string } & AsignacionRol) =>

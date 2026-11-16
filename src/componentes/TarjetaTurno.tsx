@@ -23,12 +23,14 @@ function textoPosicion(turno: Turno): string {
   return `${turno.personasDelante} ${turno.personasDelante === 1 ? 'persona' : 'personas'} delante${espera}`;
 }
 
-export function TarjetaTurno({ turno, titulo = 'Tu turno', desactualizado }: { turno: Turno; titulo?: string; desactualizado?: string }) {
+/** `lugar`: agencia y servicio según el catálogo, por ejemplo «Caja · Agencia Mocoa». */
+export function TarjetaTurno({ turno, titulo = 'Tu turno', desactualizado, lugar }: { turno: Turno; titulo?: string; desactualizado?: string; lugar?: string }) {
   const estado = ESTADOS[turno.estado];
   return (
     <View style={estilos.tarjeta} accessible accessibilityLabel={`${titulo} ${turno.codigo ?? ''}, ${estado.texto}`}>
       <Text style={estilos.titulo}>{titulo}</Text>
       <Text style={estilos.codigo}>{turno.codigo ?? '—'}</Text>
+      {lugar && <Text style={estilos.lugar}>{lugar}</Text>}
       <View style={estilos.fila}>
         <Text style={[estilos.chip, { backgroundColor: estado.color }]}>● {estado.texto}</Text>
         {turno.tipoAtencion === 'PREFERENCIAL' && (
@@ -54,6 +56,7 @@ const estilos = StyleSheet.create({
     marginBottom: espacio[4],
   },
   titulo: { color: colores.textoSecundario, fontSize: texto.sm },
+  lugar: { color: colores.textoSecundario, fontSize: texto.md, marginBottom: espacio[2] },
   codigo: { color: colores.texto, fontSize: texto.xxl, fontWeight: '600', marginVertical: espacio[2] },
   fila: { flexDirection: 'row', flexWrap: 'wrap', gap: espacio[2] },
   chip: {

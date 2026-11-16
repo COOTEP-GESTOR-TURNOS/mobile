@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { type AgenciaCatalogo, administracionApi, type FichaUsuario, NOMBRE_ROL, puedeAsignarRol } from '../api/administracion';
+import { administracionApi, type FichaUsuario, NOMBRE_ROL, puedeAsignarRol } from '../api/administracion';
+import type { AgenciaCatalogo } from '../api/catalogo';
 import { mensajeDeError } from '../api/http';
+import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
 import { Aviso, Campo } from '../componentes/Campo';
 import { Opciones } from '../componentes/Opciones';
@@ -21,7 +23,7 @@ export function Administracion() {
   const propias = roles.filter((r) => r.rol === 'ADMIN_AGENCIA').map((r) => r.agenciaId!);
   const rolesAsignables = superadmin ? TODOS : (['FUNCIONARIO'] as Rol[]);
 
-  const [agencias, setAgencias] = useState<AgenciaCatalogo[]>([]);
+  const { agencias, error: errorCatalogo } = useCatalogo();
   const [texto_, setTexto] = useState('');
   const [usuarios, setUsuarios] = useState<FichaUsuario[]>([]);
   const [total, setTotal] = useState(0);
@@ -47,7 +49,6 @@ export function Administracion() {
   }, []);
 
   useEffect(() => {
-    void administracionApi.agencias().then((a) => setAgencias(a ?? [])).catch((err) => setError(mensajeDeError(err)));
     void buscar('');
   }, [buscar]);
 
@@ -87,7 +88,7 @@ export function Administracion() {
   return (
     <View>
       <Text style={estilos.titulo}>{superadmin ? 'Control global' : `Administración · ${propias.map(nombreAgencia).filter(Boolean).join(', ')}`}</Text>
-      {error && <Aviso>{error}</Aviso>}
+      {(error ?? errorCatalogo) && <Aviso>{(error ?? errorCatalogo)!}</Aviso>}
       <Boton titulo="Nuevo usuario" onPress={() => setCreando(true)} />
       <Campo etiqueta="Buscar por nombre, correo o documento" value={texto_} onChangeText={setTexto} onSubmitEditing={() => void buscar(texto_)} returnKeyType="search" />
       <Boton titulo="Buscar" variante="secundario" onPress={() => void buscar(texto_)} />

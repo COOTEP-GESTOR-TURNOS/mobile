@@ -1,10 +1,12 @@
 import * as Crypto from 'expo-crypto';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Switch, Text, Vibration, View } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { almacenLocal } from '../almacenamiento/local';
 import { ErrorApi } from '../api/http';
-import { AGENCIAS, SERVICIOS, Turno, turnosApi } from '../api/turnos';
+import { agenciasAbiertas, describirFila, servicioParaAgencia, serviciosDe } from '../api/catalogo';
+import { Turno, turnosApi } from '../api/turnos';
+import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
 import { Opciones } from '../componentes/Opciones';
 import { TarjetaTurno } from '../componentes/TarjetaTurno';
@@ -17,8 +19,11 @@ export function Asociado() {
   const { usuario } = useSesion();
   const [turno, setTurno] = useState<Turno | null>(null);
   const [desactualizado, setDesactualizado] = useState<string | undefined>();
-  const [agenciaId, setAgenciaId] = useState(AGENCIAS[0].id);
-  const [servicioId, setServicioId] = useState(SERVICIOS[0].id);
+  const catalogo = useCatalogo();
+  const abiertas = useMemo(() => agenciasAbiertas(catalogo.agencias), [catalogo.agencias]);
+  const [agenciaId, setAgenciaId] = useState('');
+  const [servicioId, setServicioId] = useState('');
+  const [agenciaGuardada, setAgenciaGuardada] = useState<string | null>(null);
   const [preferencial, setPreferencial] = useState(false);
   const [accion, setAccion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +54,7 @@ export function Asociado() {
 
   useEffect(() => {
     void refrescar();
-    void almacenLocal.leerPreferencia('agencia').then((id) => id && setAgenciaId(id));
+    void almacenLocal.leerPreferencia('agencia').then(setAgenciaGuardada);
   }, [refrescar]);
 
   useEffect(() => {
@@ -72,6 +77,19 @@ export function Asociado() {
     }
     estadoAnterior.current = turno.estado;
   }, [turno]);
+
+  // Al llegar el catálogo elige la última agencia usada (si sigue abierta) o la primera.
+  useEffect(() => {
+    if (agenciaId || abiertas.length === 0) return;
+    const inicial = abiertas.find((a) => a.id === agenciaGuardada)?.id ?? abiertas[0].id;
+    setAgenciaId(inicial);
+    setServicioId(servicioParaAgencia(abiertas, inicial, undefined) ?? '');
+  }, [abiertas, agenciaGuardada, agenciaId]);
+
+  function elegirAgencia(id: string) {
+    setAgenciaId(id);
+    setServicioId(servicioParaAgencia(abiertas, id, servicioId) ?? '');
+  }
 
   async function ejecutar(nombre: string, operacion: () => Promise<unknown>) {
     setAccion(nombre);
@@ -111,7 +129,7 @@ export function Asociado() {
       )}
       {turno ? (
         <View>
-          <TarjetaTurno turno={turno} desactualizado={desactualizado} />
+          <TarjetaTurno turno={turno} desactualizado={desactualizado} lugar={describirFila(catalogo.agencias, turno.agenciaId, turno.servicioId)} />
           {turno.estado === 'PROXIMO' && (
             <Boton titulo="Confirmo que voy" cargando={accion === 'confirmar'} onPress={() => void ejecutar('confirmar', () => turnosApi.confirmar(turno.id))} />
           )}
@@ -122,13 +140,30 @@ export function Asociado() {
       ) : (
         <View>
           <Text style={estilos.titulo}>Pedir turno</Text>
-          <Opciones titulo="Agencia" opciones={AGENCIAS} valor={agenciaId} onCambio={setAgenciaId} />
-          <Opciones titulo="Servicio" opciones={SERVICIOS} valor={servicioId} onCambio={setServicioId} />
+          {catalogo.cargando && <Text style={estilos.nota}>Cargando agencias…</Text>}
+          {catalogo.error && (
+            <>
+              <Text style={estilos.error} accessibilityLiveRegion="assertive">
+                {catalogo.error}
+              </Text>
+              <Boton titulo="Reintentar" variante="secundario" onPress={catalogo.reintentar} />
+            </>
+          )}
+          {catalogo.desdeCopia && <Text style={estilos.nota}>Sin conexión: se muestran las agencias guardadas en el teléfono.</Text>}
+          {!catalogo.cargando && !catalogo.error && abiertas.length === 0 && (
+            <Text style={estilos.nota}>Ninguna agencia está atendiendo en este momento.</Text>
+          )}
+          {abiertas.length > 0 && (
+            <>
+              <Opciones titulo="Agencia" opciones={abiertas} valor={agenciaId} onCambio={elegirAgencia} />
+              <Opciones titulo="Servicio" opciones={serviciosDe(abiertas, agenciaId)} valor={servicioId} onCambio={setServicioId} />
+            </>
+          )}
           <View style={estilos.preferencial}>
             <Switch value={preferencial} onValueChange={setPreferencial} accessibilityLabel="Necesito atención preferencial" />
             <Text style={estilos.textoPreferencial}>Necesito atención preferencial (gestante o persona con discapacidad)</Text>
           </View>
-          <Boton titulo="Pedir turno" cargando={accion === 'pedir'} onPress={pedirTurno} />
+          <Boton titulo="Pedir turno" cargando={accion === 'pedir'} deshabilitado={!agenciaId || !servicioId} onPress={pedirTurno} />
         </View>
       )}
     </View>
@@ -140,4 +175,5 @@ const estilos = StyleSheet.create({
   preferencial: { flexDirection: 'row', alignItems: 'center', gap: espacio[3], marginTop: espacio[4] },
   textoPreferencial: { flex: 1, color: colores.texto, fontSize: texto.sm },
   error: { color: colores.error, marginBottom: espacio[3] },
+  nota: { color: colores.textoSecundario, fontSize: texto.sm, marginTop: espacio[3] },
 });

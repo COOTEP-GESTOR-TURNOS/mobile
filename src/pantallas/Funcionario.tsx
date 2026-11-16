@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ErrorApi } from '../api/http';
-import { AGENCIAS, SERVICIOS, Turno, turnosApi } from '../api/turnos';
+import { describirFila, servicioParaAgencia } from '../api/catalogo';
+import { Turno, turnosApi } from '../api/turnos';
+import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
+import { Opciones } from '../componentes/Opciones';
 import { TarjetaTurno } from '../componentes/TarjetaTurno';
 import { useSesion } from '../sesion';
 import { colores, espacio, texto } from '../tema/tokens';
@@ -12,7 +15,15 @@ export function Funcionario() {
   const { usuario } = useSesion();
   const ambito = usuario?.roles.find((r) => r.rol === 'FUNCIONARIO' || r.rol === 'ADMIN_AGENCIA');
   const agenciaId = ambito?.agenciaId ?? '';
-  const servicioId = ambito?.servicioId ?? SERVICIOS[0].id;
+  const servicioFijo = ambito?.servicioId;
+  const catalogo = useCatalogo();
+  const agencia = catalogo.agencias.find((a) => a.id === agenciaId);
+  const [servicioId, setServicioId] = useState(servicioFijo ?? '');
+
+  // Sin servicio asignado por su rol, empieza en la primera fila de su agencia.
+  useEffect(() => {
+    if (!servicioId && agencia) setServicioId(servicioParaAgencia(catalogo.agencias, agencia.id, undefined) ?? '');
+  }, [agencia, catalogo.agencias, servicioId]);
   const [actual, setActual] = useState<Turno | null>(null);
   const [accion, setAccion] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -33,9 +44,14 @@ export function Funcionario() {
 
   return (
     <View>
-      <Text style={estilos.titulo}>Agencia {AGENCIAS.find((a) => a.id === agenciaId)?.nombre ?? 'sin asignar'}</Text>
-      <Text style={estilos.subtitulo}>Fila: {SERVICIOS.find((s) => s.id === servicioId)?.nombre}</Text>
-      <Boton titulo="Llamar siguiente" cargando={accion === 'llamar'} onPress={() => void ejecutar('llamar', () => turnosApi.llamarSiguiente(agenciaId, servicioId))} />
+      <Text style={estilos.titulo}>{agencia?.nombre ?? (catalogo.cargando ? 'Cargando agencia…' : 'Agencia sin asignar')}</Text>
+      {catalogo.error && <Text style={estilos.error}>{catalogo.error}</Text>}
+      {!catalogo.cargando && !catalogo.error && !agencia && (
+        <Text style={estilos.error}>Tu rol no tiene una agencia del catálogo. Pide al administrador que revise tu asignación.</Text>
+      )}
+      {agencia && servicioFijo && <Text style={estilos.subtitulo}>Fila: {agencia.servicios.find((s) => s.id === servicioFijo)?.nombre ?? 'no disponible'}</Text>}
+      {agencia && !servicioFijo && <Opciones titulo="Fila que atiendo" opciones={agencia.servicios} valor={servicioId} onCambio={setServicioId} />}
+      <Boton titulo="Llamar siguiente" cargando={accion === 'llamar'} deshabilitado={!servicioId || !agencia} onPress={() => void ejecutar('llamar', () => turnosApi.llamarSiguiente(agenciaId, servicioId))} />
       {mensaje && (
         <Text style={estilos.mensaje} accessibilityLiveRegion="polite">
           {mensaje}
@@ -43,7 +59,7 @@ export function Funcionario() {
       )}
       {actual && (
         <View style={{ marginTop: espacio[4] }}>
-          <TarjetaTurno turno={actual} titulo="Turno en ventanilla" />
+          <TarjetaTurno turno={actual} titulo="Turno en ventanilla" lugar={describirFila(catalogo.agencias, actual.agenciaId, actual.servicioId)} />
           {actual.estado === 'LLAMADO' && actual.tipoAtencion === 'PREFERENCIAL' && (
             <>
               <Boton titulo="Preferencial verificado" variante="secundario" cargando={accion === 'si'} onPress={() => void ejecutar('si', () => turnosApi.verificarPreferencial(actual.id, true))} />
@@ -69,4 +85,5 @@ const estilos = StyleSheet.create({
   titulo: { fontSize: texto.xl, fontWeight: '600', color: colores.texto },
   subtitulo: { fontSize: texto.md, color: colores.textoSecundario, marginTop: espacio[1] },
   mensaje: { color: colores.textoSecundario, marginTop: espacio[3] },
+  error: { color: colores.error, marginTop: espacio[3] },
 });
