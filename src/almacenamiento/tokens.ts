@@ -1,7 +1,10 @@
 import * as SecureStore from 'expo-secure-store';
 
-/** Los tokens van en el almacenamiento seguro del sistema (Android Keystore), nunca en SQLite. */
-const CLAVE = 'cootep_token_acceso';
+/**
+ * El token de renovación va en el almacenamiento seguro del sistema (Android Keystore), nunca en
+ * SQLite. El de acceso dura 10 minutos y vive solo en memoria.
+ */
+const CLAVE = 'cootep_token_renovacion';
 
 export const tokensSeguros = {
   leer: () => SecureStore.getItemAsync(CLAVE),

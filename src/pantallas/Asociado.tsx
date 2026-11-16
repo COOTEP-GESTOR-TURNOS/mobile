@@ -1,36 +1,16 @@
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, Vibration, View } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, Vibration, View } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { almacenLocal } from '../almacenamiento/local';
 import { ErrorApi } from '../api/http';
 import { AGENCIAS, SERVICIOS, Turno, turnosApi } from '../api/turnos';
 import { Boton } from '../componentes/Boton';
+import { Opciones } from '../componentes/Opciones';
 import { TarjetaTurno } from '../componentes/TarjetaTurno';
 import { API_URL } from '../config';
 import { useSesion } from '../sesion';
-import { colores, espacio, objetivoTactil, radio, texto } from '../tema/tokens';
-
-function Opciones({ titulo, opciones, valor, onCambio }: { titulo: string; opciones: { id: string; nombre: string }[]; valor: string; onCambio: (id: string) => void }) {
-  return (
-    <View>
-      <Text style={estilos.etiqueta}>{titulo}</Text>
-      <View style={estilos.opciones}>
-        {opciones.map((o) => (
-          <Pressable
-            key={o.id}
-            onPress={() => onCambio(o.id)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: o.id === valor }}
-            style={[estilos.opcion, o.id === valor && estilos.opcionElegida]}
-          >
-            <Text style={{ color: o.id === valor ? '#FFFFFF' : colores.texto }}>{o.nombre}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
-  );
-}
+import { colores, espacio, texto } from '../tema/tokens';
 
 /** CU-02 y CU-03 en el teléfono: pedir, seguir, confirmar y cancelar el turno. */
 export function Asociado() {
@@ -157,18 +137,6 @@ export function Asociado() {
 
 const estilos = StyleSheet.create({
   titulo: { fontSize: texto.xl, fontWeight: '600', color: colores.texto },
-  etiqueta: { fontSize: texto.sm, color: colores.textoSecundario, marginTop: espacio[4], marginBottom: espacio[2] },
-  opciones: { flexDirection: 'row', flexWrap: 'wrap', gap: espacio[2] },
-  opcion: {
-    minHeight: objetivoTactil,
-    justifyContent: 'center',
-    paddingHorizontal: espacio[4],
-    borderRadius: radio,
-    borderWidth: 1,
-    borderColor: colores.borde,
-    backgroundColor: colores.superficie,
-  },
-  opcionElegida: { backgroundColor: colores.primario, borderColor: colores.primario },
   preferencial: { flexDirection: 'row', alignItems: 'center', gap: espacio[3], marginTop: espacio[4] },
   textoPreferencial: { flex: 1, color: colores.texto, fontSize: texto.sm },
   error: { color: colores.error, marginBottom: espacio[3] },
