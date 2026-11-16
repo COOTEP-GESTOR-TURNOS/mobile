@@ -6,6 +6,7 @@ import { Opciones } from './src/componentes/Opciones';
 import { Administracion } from './src/pantallas/Administracion';
 import { Asociado } from './src/pantallas/Asociado';
 import { Funcionario } from './src/pantallas/Funcionario';
+import { Indicadores } from './src/pantallas/Indicadores';
 import { Ingresar } from './src/pantallas/Ingresar';
 import { Recuperar, Registro } from './src/pantallas/Registro';
 import { ProveedorSesion, useSesion } from './src/sesion';
@@ -14,7 +15,7 @@ import { colores, espacio, objetivoTactil, texto } from './src/tema/tokens';
 // Cierra la pestaña del navegador cuando Google devuelve el control a la app.
 WebBrowser.maybeCompleteAuthSession();
 
-type Seccion = 'administracion' | 'atencion' | 'turno';
+type Seccion = 'administracion' | 'indicadores' | 'atencion' | 'turno';
 
 /** Sin sesión: ingresar, registrarse o recuperar la contraseña. */
 function Acceso() {
@@ -33,7 +34,9 @@ function PantallaPorRol() {
 
   const roles = usuario.roles.map((r) => r.rol);
   const secciones: { id: Seccion; nombre: string }[] = [
-    ...(roles.includes('SUPERADMIN') || roles.includes('ADMIN_AGENCIA') ? [{ id: 'administracion' as const, nombre: 'Administración' }] : []),
+    ...(roles.includes('SUPERADMIN') || roles.includes('ADMIN_AGENCIA')
+      ? [{ id: 'administracion' as const, nombre: 'Administración' }, { id: 'indicadores' as const, nombre: 'Indicadores' }]
+      : []),
     ...(roles.includes('FUNCIONARIO') || roles.includes('ADMIN_AGENCIA') ? [{ id: 'atencion' as const, nombre: 'Atención' }] : []),
     ...(roles.includes('ASOCIADO') ? [{ id: 'turno' as const, nombre: 'Mi turno' }] : []),
   ];
@@ -45,6 +48,7 @@ function PantallaPorRol() {
       {secciones.length > 1 && <Opciones titulo="Sección" opciones={secciones} valor={actual} onCambio={setElegida} />}
       <View style={{ marginTop: espacio[4] }}>
         {actual === 'administracion' && <Administracion />}
+        {actual === 'indicadores' && <Indicadores />}
         {actual === 'atencion' && <Funcionario />}
         {actual === 'turno' && <Asociado />}
         {!actual && <Text>Tu rol no tiene una pantalla en la app.</Text>}
