@@ -8,6 +8,7 @@ import { agenciasAbiertas, describirFila, servicioParaAgencia, serviciosDe } fro
 import { Turno, turnosApi } from '../api/turnos';
 import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
+import { MejorHorario } from '../componentes/MejorHorario';
 import { Opciones } from '../componentes/Opciones';
 import { TarjetaTurno } from '../componentes/TarjetaTurno';
 import { API_URL } from '../config';
@@ -157,6 +158,7 @@ export function Asociado() {
             <>
               <Opciones titulo="Agencia" opciones={abiertas} valor={agenciaId} onCambio={elegirAgencia} />
               <Opciones titulo="Servicio" opciones={serviciosDe(abiertas, agenciaId)} valor={servicioId} onCambio={setServicioId} />
+              {agenciaId && servicioId ? <MejorHorario agenciaId={agenciaId} servicioId={servicioId} /> : null}
             </>
           )}
           <View style={estilos.preferencial}>
