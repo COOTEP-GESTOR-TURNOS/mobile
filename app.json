@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "COOTEP Turno",
-    "slug": "cootep-turno",
+    "slug": "cootep-turnos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -35,6 +35,12 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a5f4d9af-6ac0-4b02-856a-ec19d382c34e"
+      }
+    },
+    "owner": "miliums-team"
   }
 }

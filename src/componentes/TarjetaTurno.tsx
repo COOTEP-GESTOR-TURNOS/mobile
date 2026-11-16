@@ -14,10 +14,13 @@ const ESTADOS: Record<EstadoTurno, { texto: string; color: string }> = {
 };
 
 function textoPosicion(turno: Turno): string {
+  if (turno.estado === 'LLAMADO') return 'Acércate a la ventanilla';
+  if (turno.estado === 'EN_ATENCION') return 'Te están atendiendo';
+  if (['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(turno.estado)) return 'Este turno ya terminó';
   if (turno.personasDelante === null) return 'Calculando tu posición…';
-  const posicion = turno.personasDelante === 0 ? 'Eres el siguiente' : `${turno.personasDelante} personas delante`;
-  const espera = typeof turno.esperaEstimadaMin === 'number' ? ` · unos ${Math.ceil(turno.esperaEstimadaMin)} min` : '';
-  return posicion + espera;
+  if (turno.personasDelante === 0) return 'Eres el siguiente';
+  const espera = typeof turno.esperaEstimadaMin === 'number' ? ` · unos ${Math.max(1, Math.ceil(turno.esperaEstimadaMin))} min` : '';
+  return `${turno.personasDelante} ${turno.personasDelante === 1 ? 'persona' : 'personas'} delante${espera}`;
 }
 
 export function TarjetaTurno({ turno, titulo = 'Tu turno', desactualizado }: { turno: Turno; titulo?: string; desactualizado?: string }) {
