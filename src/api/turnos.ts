@@ -37,22 +37,3 @@ export const turnosApi = {
   verificarPreferencial: (id: string, cumple: boolean) =>
     pedir<Turno>('POST', `/turnos/${id}/verificar-preferencial`, { cuerpo: { cumple } }),
 };
-
-/** Catálogo de los datos de prueba. Pendiente: GET /api/v1/agencias. */
-export const AGENCIAS = [
-  { id: 'a0000000-0000-4000-8000-000000000001', nombre: 'Mocoa' },
-  { id: 'a0000000-0000-4000-8000-000000000002', nombre: 'Puerto Asís' },
-  { id: 'a0000000-0000-4000-8000-000000000003', nombre: 'Orito' },
-  { id: 'a0000000-0000-4000-8000-000000000004', nombre: 'La Hormiga' },
-  { id: 'a0000000-0000-4000-8000-000000000005', nombre: 'Sibundoy' },
-  { id: 'a0000000-0000-4000-8000-000000000006', nombre: 'Villagarzón' },
-  { id: 'a0000000-0000-4000-8000-000000000007', nombre: 'Puerto Leguízamo' },
-  { id: 'a0000000-0000-4000-8000-000000000008', nombre: 'Puerto Caicedo' },
-];
-
-export const SERVICIOS = [
-  { id: 'b0000000-0000-4000-8000-000000000001', nombre: 'Caja' },
-  { id: 'b0000000-0000-4000-8000-000000000002', nombre: 'Créditos' },
-  { id: 'b0000000-0000-4000-8000-000000000003', nombre: 'Ahorros' },
-  { id: 'b0000000-0000-4000-8000-000000000004', nombre: 'Atención' },
-];
