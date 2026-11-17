@@ -50,6 +50,8 @@ export const NOMBRE_ACCION: Record<string, string> = {
   PARAMETRO_RESTABLECIDO: 'Parámetro restablecido',
   AGENCIA_ACTIVADA: 'Agencia abierta',
   AGENCIA_DESACTIVADA: 'Agencia cerrada',
+  JORNADA_CERRADA: 'Jornada cerrada',
+  JORNADA_REABIERTA: 'Jornada reabierta',
 };
 
 /** Acciones que conviene revisar: se marcan en la tabla. */
@@ -71,6 +73,11 @@ export function describirDetalle(detalle: Record<string, unknown> | null): strin
         : JSON.stringify(v)
       : String(v);
   if ('antes' in detalle && 'despues' in detalle) return `${texto(detalle.antes)} → ${texto(detalle.despues)}`;
+  // Cierre de la jornada (RN-13): lo que importa es cuántos turnos se cancelaron y cuánto tardó el motor.
+  if ('cancelados' in detalle && 'siguenEnAtencion' in detalle) {
+    const partes = [`${String(detalle.cancelados)} cancelados`, `${String(detalle.siguenEnAtencion)} en atención`, `motor ${String(detalle.duracionMotorMs)} ms`];
+    return [...partes, ...(detalle.automatico ? ['automático'] : [])].join(' · ');
+  }
   return Object.entries(detalle)
     .map(([k, v]) => `${k}: ${texto(v)}`)
     .join(' · ');

@@ -85,7 +85,7 @@ export function Auditoria() {
             {horaColombia(e.ocurridoEn)} · {NOMBRE_ACCION[e.accion] ?? e.accion}
           </Text>
           <Text style={estilos.nota}>
-            {e.actor.nombre ?? 'Correo desconocido'}
+            {e.actor.nombre ?? (e.actor.rol === 'SISTEMA' ? 'Sistema (automático)' : 'Correo desconocido')}
             {e.actor.rol ? ` · ${e.actor.rol}` : ''}
           </Text>
           <Text style={estilos.nota}>
