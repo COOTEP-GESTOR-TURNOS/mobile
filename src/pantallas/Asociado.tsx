@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { almacenLocal } from '../almacenamiento/local';
 import { ErrorApi } from '../api/http';
 import { agenciasAbiertas, describirFila, servicioParaAgencia, serviciosDe } from '../api/catalogo';
-import { Turno, turnosApi } from '../api/turnos';
+import { avisoDeCambio, Turno, turnosApi } from '../api/turnos';
 import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
 import { MejorHorario } from '../componentes/MejorHorario';
@@ -28,6 +28,7 @@ export function Asociado() {
   const [preferencial, setPreferencial] = useState(false);
   const [accion, setAccion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const claveIdempotencia = useRef(Crypto.randomUUID());
   const estadoAnterior = useRef<string | null>(null);
   const socket = useRef<Socket | null>(null);
@@ -61,7 +62,13 @@ export function Asociado() {
   useEffect(() => {
     if (!usuario) return;
     const conexion = io(API_URL, { path: '/socket.io', auth: { token: usuario.token }, transports: ['websocket'] });
-    conexion.on('turno:estado', () => void refrescar());
+    // El aviso trae el turno: si quedó ausente por un vencimiento, se explica y vibra.
+    conexion.on('turno:estado', (cambio: Turno) => {
+      const texto = avisoDeCambio(cambio);
+      setAviso(texto);
+      if (cambio.estado === 'AUSENTE') Vibration.vibrate(500);
+      void refrescar();
+    });
     conexion.on('fila:actualizada', () => void refrescar());
     socket.current = conexion;
     return () => {
@@ -106,6 +113,7 @@ export function Asociado() {
   }
 
   function pedirTurno() {
+    setAviso(null);
     void almacenLocal.guardarPreferencia('agencia', agenciaId);
     void ejecutar('pedir', async () => {
       await turnosApi.solicitar(agenciaId, servicioId, preferencial, claveIdempotencia.current);
@@ -123,6 +131,11 @@ export function Asociado() {
 
   return (
     <View>
+      {aviso && (
+        <Text style={[estilos.aviso, aviso.includes('ausente') && { color: colores.error, borderColor: colores.error }]} accessibilityLiveRegion="assertive">
+          {aviso}
+        </Text>
+      )}
       {error && (
         <Text style={estilos.error} accessibilityLiveRegion="assertive">
           {error}
@@ -177,5 +190,14 @@ const estilos = StyleSheet.create({
   preferencial: { flexDirection: 'row', alignItems: 'center', gap: espacio[3], marginTop: espacio[4] },
   textoPreferencial: { flex: 1, color: colores.texto, fontSize: texto.sm },
   error: { color: colores.error, marginBottom: espacio[3] },
+  aviso: {
+    color: colores.info,
+    borderWidth: 1,
+    borderColor: colores.info,
+    borderRadius: 8,
+    padding: espacio[3],
+    marginBottom: espacio[3],
+    backgroundColor: colores.superficie,
+  },
   nota: { color: colores.textoSecundario, fontSize: texto.sm, marginTop: espacio[3] },
 });
