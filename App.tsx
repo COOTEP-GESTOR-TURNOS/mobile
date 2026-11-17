@@ -1,7 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Aviso } from './src/componentes/Campo';
 import { Opciones } from './src/componentes/Opciones';
 import { Administracion } from './src/pantallas/Administracion';
 import { Agencia } from './src/pantallas/Agencia';
@@ -10,6 +11,7 @@ import { Asociado } from './src/pantallas/Asociado';
 import { Funcionario } from './src/pantallas/Funcionario';
 import { Indicadores } from './src/pantallas/Indicadores';
 import { Ingresar } from './src/pantallas/Ingresar';
+import { MiCuenta } from './src/pantallas/MiCuenta';
 import { Recuperar, Registro } from './src/pantallas/Registro';
 import { ProveedorSesion, useSesion } from './src/sesion';
 import { colores, espacio, objetivoTactil, texto } from './src/tema/tokens';
@@ -17,7 +19,7 @@ import { colores, espacio, objetivoTactil, texto } from './src/tema/tokens';
 // Cierra la pestaña del navegador cuando Google devuelve el control a la app.
 WebBrowser.maybeCompleteAuthSession();
 
-type Seccion = 'administracion' | 'agencia' | 'indicadores' | 'auditoria' | 'atencion' | 'turno';
+type Seccion = 'administracion' | 'agencia' | 'indicadores' | 'auditoria' | 'atencion' | 'turno' | 'cuenta';
 
 /** Sin sesión: ingresar, registrarse o recuperar la contraseña. */
 function Acceso() {
@@ -31,6 +33,11 @@ function Acceso() {
 function PantallaPorRol() {
   const { usuario, cargando, cerrarSesion } = useSesion();
   const [elegida, setElegida] = useState<Seccion | null>(null);
+  const incompleto = usuario !== null && !usuario.perfilCompleto;
+  // Fija Mi cuenta mientras se completa: al guardar el documento la persona sigue viendo el resultado.
+  useEffect(() => {
+    if (incompleto) setElegida((e) => e ?? 'cuenta');
+  }, [incompleto]);
   if (cargando) return <ActivityIndicator color={colores.primario} style={{ marginTop: espacio[7] }} />;
   if (!usuario) return <Acceso />;
 
@@ -46,13 +53,17 @@ function PantallaPorRol() {
     ...(roles.includes('SUPERADMIN') ? [{ id: 'auditoria' as const, nombre: 'Auditoría' }] : []),
     ...(roles.includes('FUNCIONARIO') || roles.includes('ADMIN_AGENCIA') ? [{ id: 'atencion' as const, nombre: 'Atención' }] : []),
     ...(roles.includes('ASOCIADO') ? [{ id: 'turno' as const, nombre: 'Mi turno' }] : []),
+    { id: 'cuenta' as const, nombre: 'Mi cuenta' },
   ];
-  const actual = elegida && secciones.some((s) => s.id === elegida) ? elegida : secciones[0]?.id;
+  // Una cuenta creada con Google llega sin documento: la app abre primero Mi cuenta para completarlo.
+  const inicial = usuario.perfilCompleto ? secciones[0].id : 'cuenta';
+  const actual = elegida && secciones.some((s) => s.id === elegida) ? elegida : inicial;
 
   return (
     <View>
       <Text style={estilos.saludo}>Hola, {usuario.nombre}</Text>
       {secciones.length > 1 && <Opciones titulo="Sección" opciones={secciones} valor={actual} onCambio={setElegida} />}
+      {!usuario.perfilCompleto && actual !== 'cuenta' && <Aviso tipo="info">Te falta tu documento: complétalo en Mi cuenta.</Aviso>}
       <View style={{ marginTop: espacio[4] }}>
         {actual === 'administracion' && <Administracion />}
         {actual === 'agencia' && <Agencia />}
@@ -60,7 +71,7 @@ function PantallaPorRol() {
         {actual === 'auditoria' && <Auditoria />}
         {actual === 'atencion' && <Funcionario />}
         {actual === 'turno' && <Asociado />}
-        {!actual && <Text>Tu rol no tiene una pantalla en la app.</Text>}
+        {actual === 'cuenta' && <MiCuenta />}
       </View>
       <Pressable accessibilityRole="button" onPress={() => void cerrarSesion()} style={estilos.salir}>
         <Text style={estilos.textoSalir}>Cerrar sesión</Text>
