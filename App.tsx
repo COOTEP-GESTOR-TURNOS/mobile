@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Opciones } from './src/componentes/Opciones';
 import { Administracion } from './src/pantallas/Administracion';
+import { Agencia } from './src/pantallas/Agencia';
 import { Asociado } from './src/pantallas/Asociado';
 import { Funcionario } from './src/pantallas/Funcionario';
 import { Indicadores } from './src/pantallas/Indicadores';
@@ -15,7 +16,7 @@ import { colores, espacio, objetivoTactil, texto } from './src/tema/tokens';
 // Cierra la pestaña del navegador cuando Google devuelve el control a la app.
 WebBrowser.maybeCompleteAuthSession();
 
-type Seccion = 'administracion' | 'indicadores' | 'atencion' | 'turno';
+type Seccion = 'administracion' | 'agencia' | 'indicadores' | 'atencion' | 'turno';
 
 /** Sin sesión: ingresar, registrarse o recuperar la contraseña. */
 function Acceso() {
@@ -35,7 +36,11 @@ function PantallaPorRol() {
   const roles = usuario.roles.map((r) => r.rol);
   const secciones: { id: Seccion; nombre: string }[] = [
     ...(roles.includes('SUPERADMIN') || roles.includes('ADMIN_AGENCIA')
-      ? [{ id: 'administracion' as const, nombre: 'Administración' }, { id: 'indicadores' as const, nombre: 'Indicadores' }]
+      ? [
+          { id: 'administracion' as const, nombre: 'Usuarios' },
+          { id: 'agencia' as const, nombre: roles.includes('SUPERADMIN') ? 'Agencias' : 'Mi agencia' },
+          { id: 'indicadores' as const, nombre: 'Indicadores' },
+        ]
       : []),
     ...(roles.includes('FUNCIONARIO') || roles.includes('ADMIN_AGENCIA') ? [{ id: 'atencion' as const, nombre: 'Atención' }] : []),
     ...(roles.includes('ASOCIADO') ? [{ id: 'turno' as const, nombre: 'Mi turno' }] : []),
@@ -48,6 +53,7 @@ function PantallaPorRol() {
       {secciones.length > 1 && <Opciones titulo="Sección" opciones={secciones} valor={actual} onCambio={setElegida} />}
       <View style={{ marginTop: espacio[4] }}>
         {actual === 'administracion' && <Administracion />}
+        {actual === 'agencia' && <Agencia />}
         {actual === 'indicadores' && <Indicadores />}
         {actual === 'atencion' && <Funcionario />}
         {actual === 'turno' && <Asociado />}
