@@ -21,6 +21,8 @@ interface Sesion {
   abrirSesion: (sesion: SesionAbierta) => Promise<void>;
   /** Solo desarrollo: token de npm run token:dev (sin renovación). */
   iniciarConToken: (token: string) => Promise<void>;
+  /** Vuelve a leer el perfil después de cambiar los datos propios (por ejemplo, el documento). */
+  recargarPerfil: () => Promise<void>;
   cerrarSesion: () => Promise<void>;
 }
 
@@ -127,10 +129,18 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       token: token.trim(),
       email: '',
       nombre: 'Usuario de prueba',
+      tipoDocumento: null,
+      numeroDocumento: null,
+      fechaNacimiento: null,
       mfaActivo: false,
       tienePassword: false,
       perfilCompleto: true,
     });
+  }, []);
+
+  const recargarPerfil = useCallback(async () => {
+    const perfil = await authApi.yo();
+    if (perfil) setUsuario((actual) => (actual ? { ...actual, ...perfil } : actual));
   }, []);
 
   const cerrarSesion = useCallback(async () => {
@@ -141,8 +151,8 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   }, [limpiar]);
 
   const valor = useMemo(
-    () => ({ usuario, cargando, abrirSesion, iniciarConToken, cerrarSesion }),
-    [usuario, cargando, abrirSesion, iniciarConToken, cerrarSesion],
+    () => ({ usuario, cargando, abrirSesion, iniciarConToken, recargarPerfil, cerrarSesion }),
+    [usuario, cargando, abrirSesion, iniciarConToken, recargarPerfil, cerrarSesion],
   );
   return <ContextoSesion.Provider value={valor}>{children}</ContextoSesion.Provider>;
 }
