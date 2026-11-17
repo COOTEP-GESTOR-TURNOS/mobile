@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { Opciones } from './src/componentes/Opciones';
 import { Administracion } from './src/pantallas/Administracion';
 import { Agencia } from './src/pantallas/Agencia';
+import { Auditoria } from './src/pantallas/Auditoria';
 import { Asociado } from './src/pantallas/Asociado';
 import { Funcionario } from './src/pantallas/Funcionario';
 import { Indicadores } from './src/pantallas/Indicadores';
@@ -16,7 +17,7 @@ import { colores, espacio, objetivoTactil, texto } from './src/tema/tokens';
 // Cierra la pestaña del navegador cuando Google devuelve el control a la app.
 WebBrowser.maybeCompleteAuthSession();
 
-type Seccion = 'administracion' | 'agencia' | 'indicadores' | 'atencion' | 'turno';
+type Seccion = 'administracion' | 'agencia' | 'indicadores' | 'auditoria' | 'atencion' | 'turno';
 
 /** Sin sesión: ingresar, registrarse o recuperar la contraseña. */
 function Acceso() {
@@ -42,6 +43,7 @@ function PantallaPorRol() {
           { id: 'indicadores' as const, nombre: 'Indicadores' },
         ]
       : []),
+    ...(roles.includes('SUPERADMIN') ? [{ id: 'auditoria' as const, nombre: 'Auditoría' }] : []),
     ...(roles.includes('FUNCIONARIO') || roles.includes('ADMIN_AGENCIA') ? [{ id: 'atencion' as const, nombre: 'Atención' }] : []),
     ...(roles.includes('ASOCIADO') ? [{ id: 'turno' as const, nombre: 'Mi turno' }] : []),
   ];
@@ -55,6 +57,7 @@ function PantallaPorRol() {
         {actual === 'administracion' && <Administracion />}
         {actual === 'agencia' && <Agencia />}
         {actual === 'indicadores' && <Indicadores />}
+        {actual === 'auditoria' && <Auditoria />}
         {actual === 'atencion' && <Funcionario />}
         {actual === 'turno' && <Asociado />}
         {!actual && <Text>Tu rol no tiene una pantalla en la app.</Text>}
