@@ -50,5 +50,7 @@ export function avisoDeCambio(t: Pick<Turno, 'estado' | 'codigo' | 'motivo'>): s
   if (t.estado === 'LLAMADO') return `${codigo} fue llamado. Acércate a la ventanilla.`;
   if (t.estado === 'AUSENTE' && t.motivo === 'SIN_CONFIRMAR') return `${codigo} quedó ausente porque no confirmaste a tiempo. Puedes pedir uno nuevo.`;
   if (t.estado === 'AUSENTE') return `${codigo} quedó ausente porque no te presentaste a la ventanilla. Puedes pedir uno nuevo.`;
+  if (t.estado === 'CANCELADO' && t.motivo === 'CIERRE_AGENCIA')
+    return `${codigo} se canceló porque la agencia cerró la jornada. Puedes pedir uno en otra agencia o mañana.`;
   return null;
 }

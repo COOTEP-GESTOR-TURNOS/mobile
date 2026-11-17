@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
-import { agenciasAdminApi, errorDeValor, TEXTO_ORIGEN, type ServicioAgencia, type VistaAgencia, type VistaParametro } from '../api/agenciasAdmin';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  agenciasAdminApi,
+  errorDeValor,
+  resumenCierre,
+  TEXTO_ORIGEN,
+  type ServicioAgencia,
+  type VistaAgencia,
+  type VistaParametro,
+} from '../api/agenciasAdmin';
 import { mensajeDeError } from '../api/http';
 import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
@@ -24,6 +32,7 @@ export function Agencia() {
   const [agenciaId, setAgenciaId] = useState(propias[0] ?? '');
   const [vista, setVista] = useState<VistaAgencia | null>(null);
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
+  const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
     if (!agenciaId && opciones.length > 0) setAgenciaId(opciones[0].id);
@@ -39,7 +48,7 @@ export function Agencia() {
     return () => {
       vigente = false;
     };
-  }, [agenciaId]);
+  }, [agenciaId, recarga]);
 
   const ejecutar = useCallback(async (operacion: () => Promise<VistaAgencia | null>, exito: string) => {
     setMensaje(null);
@@ -52,6 +61,42 @@ export function Agencia() {
     }
   }, []);
 
+  /** Cierre o reapertura de la jornada: vuelve a pedir la vista para mostrar el estado del día. */
+  async function accionJornada(operacion: () => Promise<string>) {
+    setMensaje(null);
+    try {
+      const texto = await operacion();
+      setRecarga((n) => n + 1);
+      setMensaje({ tipo: 'exito', texto });
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: mensajeDeError(err) });
+    }
+  }
+
+  /** RN-13: cierra la jornada antes de la hora; cancela los turnos en espera y avisa a cada asociado. */
+  function cerrarJornada(v: VistaAgencia) {
+    Alert.alert('Cerrar la jornada', `Hoy ${v.nombre} no recibirá más turnos; los que están en espera se cancelan y cada asociado recibe el aviso.`, [
+      { text: 'Volver', style: 'cancel' },
+      {
+        text: 'Cerrar la jornada',
+        style: 'destructive',
+        onPress: () =>
+          void accionJornada(async () => {
+            const r = await agenciasAdminApi.cerrarJornada(v.id);
+            return r ? resumenCierre(r) : 'Jornada cerrada.';
+          }),
+      },
+    ]);
+  }
+
+  /** Deshace un cierre anticipado; los turnos ya cancelados no vuelven. */
+  function reabrirJornada(v: VistaAgencia) {
+    void accionJornada(async () => {
+      await agenciasAdminApi.reabrirJornada(v.id);
+      return 'Jornada reabierta: la agencia vuelve a recibir turnos en su horario.';
+    });
+  }
+
   return (
     <View>
       <Text style={estilos.titulo}>{superadmin ? 'Agencias' : 'Mi agencia'}</Text>
@@ -60,13 +105,36 @@ export function Agencia() {
       {vista && (
         <>
           <Text style={estilos.subtitulo}>
-            {vista.nombre} · {vista.activa ? 'atendiendo' : 'cerrada'}
+            {vista.nombre} · {!vista.activa ? 'cerrada' : vista.jornadaCerrada ? 'jornada cerrada' : 'atendiendo'}
           </Text>
+          {vista.activa && (
+            <Text style={estilos.nota}>
+              {vista.jornadaCerrada
+                ? 'Hoy ya no recibe turnos. Si la cerraste por error, reábrela: los turnos cancelados no vuelven.'
+                : 'La jornada se cierra sola a la hora de cierre. Ciérrala antes si la agencia deja de atender hoy.'}
+            </Text>
+          )}
+          {vista.jornadaCerrada ? (
+            vista.activa && <Boton titulo="Reabrir la jornada" variante="secundario" onPress={() => reabrirJornada(vista)} />
+          ) : (
+            <Boton titulo="Cerrar la jornada" variante="peligro" onPress={() => cerrarJornada(vista)} />
+          )}
           {superadmin && (
             <Boton
               titulo={vista.activa ? 'Cerrar agencia' : 'Abrir agencia'}
               variante={vista.activa ? 'peligro' : 'secundario'}
-              onPress={() => void ejecutar(() => agenciasAdminApi.actualizarAgencia(vista.id, !vista.activa), vista.activa ? 'Agencia cerrada.' : 'Agencia abierta.')}
+              onPress={() => {
+                const cambiar = () =>
+                  void ejecutar(
+                    () => agenciasAdminApi.actualizarAgencia(vista.id, !vista.activa),
+                    vista.activa ? 'Agencia cerrada: ya no recibe turnos y los de hoy en espera se cancelaron.' : 'Agencia abierta.',
+                  );
+                if (!vista.activa) return cambiar();
+                Alert.alert('Cerrar agencia', `${vista.nombre} deja de recibir turnos y los que están en espera hoy se cancelan.`, [
+                  { text: 'Volver', style: 'cancel' },
+                  { text: 'Cerrar agencia', style: 'destructive', onPress: cambiar },
+                ]);
+              }}
             />
           )}
 
