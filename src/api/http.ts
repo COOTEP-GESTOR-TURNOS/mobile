@@ -33,9 +33,19 @@ export class ErrorApi extends Error {
   }
 }
 
+/**
+ * El servidor no respondió (sin red, IP equivocada o conexión bloqueada). Expo SDK 58 reemplaza
+ * fetch por expo/fetch, que falla con FetchError y no con TypeError, así que el fallo se marca aquí.
+ */
+export class ErrorConexion extends Error {
+  constructor(causa: unknown) {
+    super('No se pudo conectar con el servidor', { cause: causa });
+  }
+}
+
 export function mensajeDeError(error: unknown, porDefecto = 'No se pudo completar la acción'): string {
   if (error instanceof ErrorApi) return error.problema.detail ?? error.message;
-  if (error instanceof TypeError) return 'No se pudo conectar con el servidor. Revisa la red Wi-Fi.';
+  if (error instanceof ErrorConexion || error instanceof TypeError) return 'No se pudo conectar con el servidor. Revisa la red Wi-Fi.';
   return porDefecto;
 }
 
@@ -56,6 +66,8 @@ function enviar(metodo: string, ruta: string, opciones: Opciones): Promise<Respo
       ...opciones.cabeceras,
     },
     body: opciones.cuerpo === undefined ? undefined : JSON.stringify(opciones.cuerpo),
+  }).catch((causa: unknown) => {
+    throw new ErrorConexion(causa);
   });
 }
 

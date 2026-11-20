@@ -6,7 +6,7 @@ import { mensajeDeError } from '../api/http';
 import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
 import { Aviso, Campo } from '../componentes/Campo';
-import { Opciones } from '../componentes/Opciones';
+import { Desplegable } from '../componentes/Desplegable';
 import { type AsignacionRol, type Rol, useSesion } from '../sesion';
 import { colores, espacio, objetivoTactil, radio, texto } from '../tema/tokens';
 
@@ -107,24 +107,45 @@ export function Administracion() {
   );
 }
 
-function SelectorAmbito({ agencias, roles, valor, alCambiar }: { agencias: AgenciaCatalogo[]; roles: Rol[]; valor: AsignacionRol; alCambiar: (v: AsignacionRol) => void }) {
-  const agencia = agencias.find((a) => a.id === valor.agenciaId);
-  const conAgencia = valor.rol === 'ADMIN_AGENCIA' || valor.rol === 'FUNCIONARIO';
+/** valor null: todavía no se eligió rol (al asignar otro rol a un usuario existente). */
+function SelectorAmbito({
+  agencias,
+  roles,
+  valor,
+  alCambiar,
+}: {
+  agencias: AgenciaCatalogo[];
+  roles: Rol[];
+  valor: AsignacionRol | null;
+  alCambiar: (v: AsignacionRol) => void;
+}) {
+  const agencia = agencias.find((a) => a.id === valor?.agenciaId);
+  const conAgencia = valor?.rol === 'ADMIN_AGENCIA' || valor?.rol === 'FUNCIONARIO';
+  // Desplegables: cada uno ocupa una línea aunque haya muchas agencias o servicios.
   return (
     <>
-      <Opciones
+      <Desplegable
         titulo="Rol"
+        marcador="Elige un rol"
         opciones={roles.map((r) => ({ id: r, nombre: NOMBRE_ROL[r] }))}
-        valor={valor.rol}
-        onCambio={(rol) => alCambiar({ rol, ...(rol === 'ADMIN_AGENCIA' || rol === 'FUNCIONARIO' ? { agenciaId: valor.agenciaId ?? agencias[0]?.id } : {}) })}
+        valor={valor?.rol}
+        onCambio={(rol) => alCambiar({ rol, ...(rol === 'ADMIN_AGENCIA' || rol === 'FUNCIONARIO' ? { agenciaId: valor?.agenciaId ?? agencias[0]?.id } : {}) })}
       />
-      {conAgencia && (
-        <Opciones titulo="Agencia" opciones={agencias} valor={valor.agenciaId} onCambio={(agenciaId) => alCambiar({ rol: valor.rol, agenciaId })} />
+      {valor && conAgencia && (
+        <Desplegable
+          titulo="Agencia"
+          opciones={agencias.map((a) => ({ id: a.id, nombre: a.nombre, detalle: a.activa ? undefined : 'Cerrada' }))}
+          valor={valor.agenciaId}
+          onCambio={(agenciaId) => alCambiar({ rol: valor.rol, agenciaId })}
+        />
       )}
-      {valor.rol === 'FUNCIONARIO' && agencia && (
-        <Opciones
+      {valor?.rol === 'FUNCIONARIO' && agencia && (
+        <Desplegable
           titulo="Servicio"
-          opciones={[{ id: '', nombre: 'Todos' }, ...agencia.servicios]}
+          opciones={[
+            { id: '', nombre: 'Todos', detalle: 'Atiende cualquier fila de la agencia' },
+            ...agencia.servicios.map((s) => ({ id: s.id, nombre: s.nombre, detalle: `${s.ventanillas} ${s.ventanillas === 1 ? 'ventanilla' : 'ventanillas'}` })),
+          ]}
           valor={valor.servicioId ?? ''}
           onCambio={(servicioId) => alCambiar({ ...valor, servicioId: servicioId || undefined })}
         />
@@ -194,22 +215,30 @@ function Ficha({
   alActualizar: (f: FichaUsuario) => void;
   volver: () => void;
 }) {
-  const [ambito, setAmbito] = useState<AsignacionRol>(() => inicial(roles, agencias));
+  // Sin rol elegido al abrir la ficha: «Asignar rol» solo aparece cuando el administrador elige uno.
+  const [ambito, setAmbito] = useState<AsignacionRol | null>(null);
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   const [accion, setAccion] = useState<string | null>(null);
 
-  async function ejecutar(nombre: string, operacion: () => Promise<FichaUsuario | null>, exito: string) {
+  /** Devuelve true si la operación terminó bien. */
+  async function ejecutar(nombre: string, operacion: () => Promise<FichaUsuario | null>, exito: string): Promise<boolean> {
     setAccion(nombre);
     setMensaje(null);
     try {
       const r = await operacion();
       if (r) alActualizar(r);
       setMensaje({ tipo: 'exito', texto: exito });
+      return true;
     } catch (err) {
       setMensaje({ tipo: 'error', texto: mensajeDeError(err) });
+      return false;
     } finally {
       setAccion(null);
     }
+  }
+
+  async function asignar(elegido: AsignacionRol) {
+    if (await ejecutar('asignar', () => administracionApi.asignarRol(ficha.id, elegido), 'Rol asignado.')) setAmbito(null);
   }
 
   return (
@@ -239,7 +268,12 @@ function Ficha({
 
       <Text style={estilos.subtitulo}>Asignar otro rol</Text>
       <SelectorAmbito agencias={agencias} roles={roles} valor={ambito} alCambiar={setAmbito} />
-      <Boton titulo="Asignar rol" variante="secundario" cargando={accion === 'asignar'} onPress={() => void ejecutar('asignar', () => administracionApi.asignarRol(ficha.id, ambito), 'Rol asignado.')} />
+      {ambito && (
+        <>
+          <Boton titulo="Asignar rol" cargando={accion === 'asignar'} onPress={() => void asignar(ambito)} />
+          <Boton titulo="Cancelar" variante="secundario" deshabilitado={accion === 'asignar'} onPress={() => setAmbito(null)} />
+        </>
+      )}
 
       {mensaje && <Aviso tipo={mensaje.tipo}>{mensaje.texto}</Aviso>}
       {!esYo && (

@@ -28,37 +28,50 @@ export function TarjetaTurno({ turno, titulo = 'Tu turno', desactualizado, lugar
   const estado = ESTADOS[turno.estado];
   return (
     <View style={estilos.tarjeta} accessible accessibilityLabel={`${titulo} ${turno.codigo ?? ''}, ${estado.texto}`}>
-      <Text style={estilos.titulo}>{titulo}</Text>
-      <Text style={estilos.codigo}>{turno.codigo ?? '—'}</Text>
-      {lugar && <Text style={estilos.lugar}>{lugar}</Text>}
-      <View style={estilos.fila}>
-        <Text style={[estilos.chip, { backgroundColor: estado.color }]}>● {estado.texto}</Text>
-        {turno.tipoAtencion === 'PREFERENCIAL' && (
-          <Text style={[estilos.chip, { backgroundColor: colores.preferencial }]}>Preferencial</Text>
-        )}
+      {/* El número del turno se ve como el logo: placa verde con letras doradas (5,4:1). */}
+      <View style={estilos.placa}>
+        <Text style={estilos.titulo}>{titulo}</Text>
+        <Text style={estilos.codigo}>{turno.codigo ?? '—'}</Text>
+        {lugar && <Text style={estilos.lugar}>{lugar}</Text>}
       </View>
-      {/* El lector de pantalla anuncia los cambios de posición */}
-      <Text style={estilos.posicion} accessibilityLiveRegion="polite">
-        {textoPosicion(turno)}
-      </Text>
-      {desactualizado && <Text style={estilos.aviso}>Sin conexión: último estado conocido de las {desactualizado}</Text>}
+      <View style={estilos.cuerpo}>
+        <View style={estilos.fila}>
+          <Text style={[estilos.chip, { backgroundColor: estado.color }]}>● {estado.texto}</Text>
+          {turno.tipoAtencion === 'PREFERENCIAL' && (
+            <Text style={[estilos.chip, { backgroundColor: colores.preferencial }]}>Preferencial</Text>
+          )}
+        </View>
+        {/* El lector de pantalla anuncia los cambios de posición */}
+        <Text style={estilos.posicion} accessibilityLiveRegion="polite">
+          {textoPosicion(turno)}
+        </Text>
+        {desactualizado && <Text style={estilos.aviso}>Sin conexión: último estado conocido de las {desactualizado}</Text>}
+      </View>
     </View>
   );
 }
 
 const estilos = StyleSheet.create({
   tarjeta: {
-    backgroundColor: colores.primarioSuave,
-    borderColor: colores.borde,
+    backgroundColor: colores.superficie,
+    borderColor: colores.dorado,
     borderWidth: 1,
     borderRadius: radio,
-    padding: espacio[5],
+    overflow: 'hidden',
     marginBottom: espacio[4],
   },
-  titulo: { color: colores.textoSecundario, fontSize: texto.sm },
-  lugar: { color: colores.textoSecundario, fontSize: texto.md, marginBottom: espacio[2] },
-  codigo: { color: colores.texto, fontSize: texto.xxl, fontWeight: '600', marginVertical: espacio[2] },
-  fila: { flexDirection: 'row', flexWrap: 'wrap', gap: espacio[2] },
+  placa: {
+    backgroundColor: colores.primario,
+    alignItems: 'center',
+    padding: espacio[5],
+    borderBottomWidth: 4,
+    borderBottomColor: colores.dorado,
+  },
+  titulo: { color: 'rgba(255,255,255,0.85)', fontSize: texto.sm, fontWeight: '600' },
+  codigo: { color: colores.doradoClaro, fontSize: 44, fontWeight: '700', fontVariant: ['tabular-nums'], marginVertical: espacio[1] },
+  lugar: { color: 'rgba(255,255,255,0.85)', fontSize: texto.md },
+  cuerpo: { alignItems: 'center', padding: espacio[4] },
+  fila: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: espacio[2] },
   chip: {
     color: '#FFFFFF',
     fontSize: texto.sm,
@@ -68,6 +81,6 @@ const estilos = StyleSheet.create({
     borderRadius: 999,
     overflow: 'hidden',
   },
-  posicion: { color: colores.texto, fontSize: texto.md, marginTop: espacio[3] },
-  aviso: { color: colores.aviso, fontSize: texto.sm, marginTop: espacio[2] },
+  posicion: { color: colores.texto, fontSize: texto.md, fontWeight: '600', textAlign: 'center', marginTop: espacio[3] },
+  aviso: { color: colores.aviso, fontSize: texto.sm, textAlign: 'center', marginTop: espacio[2] },
 });

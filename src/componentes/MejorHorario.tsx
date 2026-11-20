@@ -48,10 +48,18 @@ export function MejorHorario({ agenciaId, servicioId }: { agenciaId: string; ser
         {!cargando &&
           datos?.disponible &&
           datos.franjas.map((f, i) => (
-            <View key={f.desde} style={estilos.franja} accessible accessibilityLabel={`Opción ${i + 1}: de ${f.desde} a ${f.hasta}, ${textoEspera(f.esperaMedianaMin)}`}>
-              <Text style={estilos.hora}>
-                {i + 1}. {f.desde} a {f.hasta}
-              </Text>
+            <View
+              key={f.desde}
+              style={[estilos.franja, i === 0 && estilos.franjaRecomendada]}
+              accessible
+              accessibilityLabel={`Opción ${i + 1}${i === 0 ? ', recomendada' : ''}: de ${f.desde} a ${f.hasta}, ${textoEspera(f.esperaMedianaMin)}`}
+            >
+              <View style={estilos.encabezadoFranja}>
+                <Text style={estilos.hora}>
+                  {i + 1}. {f.desde} a {f.hasta}
+                </Text>
+                {i === 0 && <Text style={estilos.recomendada}>Recomendada</Text>}
+              </View>
               <Text style={estilos.espera}>{textoEspera(f.esperaMedianaMin)}</Text>
               <Text style={estilos.nota}>según {f.turnos} turnos anteriores</Text>
             </View>
@@ -76,7 +84,28 @@ const estilos = StyleSheet.create({
     backgroundColor: colores.superficie,
   },
   titulo: { fontSize: texto.lg, fontWeight: '600', color: colores.texto },
-  franja: { paddingVertical: espacio[2], borderBottomWidth: 1, borderBottomColor: colores.borde },
+  franja: {
+    padding: espacio[3],
+    marginTop: espacio[2],
+    borderWidth: 1,
+    borderColor: colores.borde,
+    borderRadius: radio,
+    backgroundColor: colores.superficie,
+  },
+  // La mejor franja se destaca en dorado; el texto «Recomendada» dice lo mismo que el color.
+  franjaRecomendada: { borderColor: colores.dorado, backgroundColor: colores.doradoSuave },
+  encabezadoFranja: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: espacio[2] },
+  recomendada: {
+    color: colores.doradoOscuro,
+    fontSize: texto.xs,
+    fontWeight: '600',
+    borderWidth: 1,
+    borderColor: colores.dorado,
+    borderRadius: 999,
+    paddingHorizontal: espacio[2],
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
   hora: { fontSize: texto.md, fontWeight: '600', color: colores.texto },
   espera: { fontSize: texto.md, color: colores.texto },
   nota: { fontSize: texto.sm, color: colores.textoSecundario, marginTop: espacio[2] },

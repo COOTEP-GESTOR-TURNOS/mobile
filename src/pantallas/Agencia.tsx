@@ -13,7 +13,7 @@ import { mensajeDeError } from '../api/http';
 import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
 import { Aviso, Campo } from '../componentes/Campo';
-import { Opciones } from '../componentes/Opciones';
+import { Desplegable } from '../componentes/Desplegable';
 import { useSesion } from '../sesion';
 import { colores, espacio, objetivoTactil, radio, texto } from '../tema/tokens';
 
@@ -100,7 +100,14 @@ export function Agencia() {
   return (
     <View>
       <Text style={estilos.titulo}>{superadmin ? 'Agencias' : 'Mi agencia'}</Text>
-      {opciones.length > 1 && <Opciones titulo="Agencia" opciones={opciones} valor={agenciaId} onCambio={setAgenciaId} />}
+      {opciones.length > 1 && (
+        <Desplegable
+          titulo="Agencia"
+          opciones={opciones.map((a) => ({ id: a.id, nombre: a.nombre, detalle: a.activa ? undefined : 'Cerrada' }))}
+          valor={agenciaId}
+          onCambio={setAgenciaId}
+        />
+      )}
       {mensaje && <Aviso tipo={mensaje.tipo}>{mensaje.texto}</Aviso>}
       {vista && (
         <>

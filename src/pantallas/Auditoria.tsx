@@ -6,6 +6,7 @@ import { fechaColombia } from '../api/recomendaciones';
 import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
 import { Aviso } from '../componentes/Campo';
+import { Desplegable } from '../componentes/Desplegable';
 import { Opciones } from '../componentes/Opciones';
 import { colores, espacio, radio, texto } from '../tema/tokens';
 
@@ -66,7 +67,12 @@ export function Auditoria() {
     <View>
       <Text style={estilos.titulo}>Auditoría</Text>
       <Text style={estilos.nota}>Solo lectura: nadie puede editar ni borrar estos registros.</Text>
-      <Opciones titulo="Ámbito" opciones={[{ id: 'GLOBAL', nombre: 'Global' }, ...agencias.map((a) => ({ id: a.id, nombre: a.nombre.replace('Agencia ', '') }))]} valor={ambito} onCambio={setAmbito} />
+      <Desplegable
+        titulo="Ámbito"
+        opciones={[{ id: 'GLOBAL', nombre: 'Global' }, ...agencias.map((a) => ({ id: a.id, nombre: a.nombre }))]}
+        valor={ambito}
+        onCambio={setAmbito}
+      />
       <Opciones titulo="Día" opciones={DIAS} valor={dia} onCambio={setDia} />
       {error && <Aviso>{error}</Aviso>}
       <Text style={estilos.subtitulo}>
