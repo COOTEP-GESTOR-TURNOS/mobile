@@ -9,7 +9,7 @@ import { avisoDeCambio, Turno, turnosApi } from '../api/turnos';
 import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
 import { MejorHorario } from '../componentes/MejorHorario';
-import { Opciones } from '../componentes/Opciones';
+import { Desplegable } from '../componentes/Desplegable';
 import { TarjetaTurno } from '../componentes/TarjetaTurno';
 import { API_URL } from '../config';
 import { useSesion } from '../sesion';
@@ -169,8 +169,26 @@ export function Asociado() {
           )}
           {abiertas.length > 0 && (
             <>
-              <Opciones titulo="Agencia" opciones={abiertas} valor={agenciaId} onCambio={elegirAgencia} />
-              <Opciones titulo="Servicio" opciones={serviciosDe(abiertas, agenciaId)} valor={servicioId} onCambio={setServicioId} />
+              <Desplegable
+                titulo="Agencia"
+                marcador="Elige una agencia"
+                opciones={abiertas.map((a) => ({ id: a.id, nombre: a.nombre }))}
+                valor={agenciaId}
+                onCambio={elegirAgencia}
+              />
+              {agenciaId ? (
+                <Desplegable
+                  titulo="Servicio"
+                  marcador="Elige un servicio"
+                  opciones={serviciosDe(abiertas, agenciaId).map((s) => ({
+                    id: s.id,
+                    nombre: s.nombre,
+                    detalle: `${s.ventanillas} ${s.ventanillas === 1 ? 'ventanilla' : 'ventanillas'}`,
+                  }))}
+                  valor={servicioId}
+                  onCambio={setServicioId}
+                />
+              ) : null}
               {agenciaId && servicioId ? <MejorHorario agenciaId={agenciaId} servicioId={servicioId} /> : null}
             </>
           )}

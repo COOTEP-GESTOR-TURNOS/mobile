@@ -1,12 +1,22 @@
-/** Guía visual compartida con la web (web/src/estilos/tokens.css). */
+/**
+ * Guía visual compartida con la web (frontend/src/estilos/app.css): mismos valores.
+ *
+ * Identidad COOTEP (colores del logo): el verde es la marca y las acciones; el dorado es un
+ * acento escaso para lo que se quiere destacar (el número del turno, la franja recomendada) y
+ * nunca comunica un estado. Como texto sobre blanco solo va doradoOscuro.
+ */
 export const colores = {
-  primario: '#0F6E56',
-  primarioSuave: '#E1F5EE',
+  primario: '#19622B', // verde del logo: 7,4:1 con texto blanco
+  primarioSuave: '#E8F3EA',
+  dorado: '#D9A43A', // bordes y filetes, no texto
+  doradoClaro: '#F6DB68', // texto sobre verde (5,4:1)
+  doradoOscuro: '#8A6416', // texto dorado sobre blanco o doradoSuave (≥4,9:1)
+  doradoSuave: '#FCF5DF',
   texto: '#1F2933',
   textoSecundario: '#52606D',
-  fondo: '#F5F7FA',
+  fondo: '#F6F7F4',
   superficie: '#FFFFFF',
-  borde: '#E4E7EB',
+  borde: '#E3E7E1',
   exito: '#1B7A35',
   aviso: '#8F5500',
   error: '#C62828',

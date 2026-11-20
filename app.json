@@ -14,7 +14,7 @@
     "android": {
       "package": "co.cootep.turno",
       "adaptiveIcon": {
-        "backgroundColor": "#0F6E56",
+        "backgroundColor": "#19622B",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
