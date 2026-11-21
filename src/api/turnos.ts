@@ -40,6 +40,25 @@ export const turnosApi = {
     pedir<Turno>('POST', `/turnos/${id}/verificar-preferencial`, { cuerpo: { cumple } }),
 };
 
+/** Mensaje después de confirmar la asistencia, con las personas que faltan antes del turno (igual que la web). */
+export function mensajeConfirmado(t: Pick<Turno, 'personasDelante'>): string {
+  const base = 'Confirmaste que vas.';
+  if (t.personasDelante === null) return `${base} Te avisamos aquí cuando te llamen.`;
+  if (t.personasDelante === 0) return `${base} Eres el siguiente: acércate a la agencia.`;
+  if (t.personasDelante === 1) return `${base} Falta 1 persona antes de tu turno.`;
+  return `${base} Faltan ${t.personasDelante} personas antes de tu turno.`;
+}
+
+/**
+ * RN-01: al pedir un turno con otro aún activo (por ejemplo, uno confirmado que nadie ha llamado),
+ * la pantalla muestra ese turno y explica qué hacer para pedir otro.
+ */
+export function mensajeTurnoActivo(t: Pick<Turno, 'codigo' | 'estado'>, lugar?: string): string {
+  const turno = `Ya tienes el turno ${t.codigo ?? 'que pediste'}${lugar ? ` (${lugar})` : ''} activo.`;
+  const cancelable = ['SOLICITADO', 'EN_ESPERA', 'PROXIMO'].includes(t.estado);
+  return `${turno} ${cancelable ? 'Cancélalo si quieres pedir otro.' : 'Termina ese turno antes de pedir otro.'}`;
+}
+
 /**
  * Aviso para el asociado cuando su turno cambia por algo que él no hizo (RN-10, RN-11): la
  * pantalla vuelve al formulario y sin este texto no sabría por qué.

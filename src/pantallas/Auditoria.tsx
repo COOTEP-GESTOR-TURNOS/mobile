@@ -66,7 +66,6 @@ export function Auditoria() {
   return (
     <View>
       <Text style={estilos.titulo}>Auditoría</Text>
-      <Text style={estilos.nota}>Solo lectura: nadie puede editar ni borrar estos registros.</Text>
       <Desplegable
         titulo="Ámbito"
         opciones={[{ id: 'GLOBAL', nombre: 'Global' }, ...agencias.map((a) => ({ id: a.id, nombre: a.nombre }))]}

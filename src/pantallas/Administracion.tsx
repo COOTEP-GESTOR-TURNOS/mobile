@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { administracionApi, type FichaUsuario, NOMBRE_ROL, puedeAsignarRol } from '../api/administracion';
@@ -243,7 +244,19 @@ function Ficha({
 
   return (
     <View>
-      <Text style={estilos.titulo}>{ficha.nombre}</Text>
+      {/* Cerrar arriba: sale de la ficha sin guardar lo que se estaba eligiendo */}
+      <View style={estilos.cabeceraFicha}>
+        <Text style={[estilos.titulo, { flex: 1 }]}>{ficha.nombre}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Cerrar la ficha de ${ficha.nombre}`}
+          onPress={volver}
+          style={({ pressed }) => [estilos.cerrarFicha, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="close" size={22} color={colores.textoSecundario} />
+          <Text style={estilos.textoCerrar}>Cerrar</Text>
+        </Pressable>
+      </View>
       <Text style={estilos.secundario}>{ficha.email}</Text>
       <Text style={estilos.secundario}>
         {[ficha.activo ? 'Activo' : 'Desactivado', ficha.tienePassword ? 'contraseña definida' : 'activación pendiente', ficha.mfaActivo ? 'MFA activo' : 'sin MFA'].join(' · ')}
@@ -303,6 +316,19 @@ const estilos = StyleSheet.create({
     padding: espacio[3],
     marginTop: espacio[2],
   },
+  cabeceraFicha: { flexDirection: 'row', alignItems: 'flex-start', gap: espacio[2] },
+  cerrarFicha: {
+    minHeight: objetivoTactil,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espacio[1],
+    paddingHorizontal: espacio[3],
+    borderWidth: 1,
+    borderColor: colores.borde,
+    borderRadius: radio,
+    backgroundColor: colores.superficie,
+  },
+  textoCerrar: { color: colores.textoSecundario, fontSize: texto.sm, fontWeight: '600' },
   rol: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colores.borde, minHeight: objetivoTactil },
   quitar: { minHeight: objetivoTactil, minWidth: objetivoTactil, justifyContent: 'center', alignItems: 'center', paddingHorizontal: espacio[3] },
 });
