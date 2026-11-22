@@ -19,33 +19,12 @@ interface Sesion {
   usuario: Usuario | null;
   cargando: boolean;
   abrirSesion: (sesion: SesionAbierta) => Promise<void>;
-  /** Solo desarrollo: token de npm run token:dev (sin renovación). */
-  iniciarConToken: (token: string) => Promise<void>;
   /** Vuelve a leer el perfil después de cambiar los datos propios (por ejemplo, el documento). */
   recargarPerfil: () => Promise<void>;
   cerrarSesion: () => Promise<void>;
 }
 
 const ContextoSesion = createContext<Sesion | null>(null);
-const ALFABETO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-
-/** Decodifica base64url sin depender de atob. El backend valida la firma en cada petición. */
-function decodificarBase64Url(texto: string): string {
-  let bits = 0;
-  let acumulado = 0;
-  let salida = '';
-  for (const caracter of texto.replace(/=+$/, '')) {
-    const valor = ALFABETO.indexOf(caracter);
-    if (valor < 0) throw new Error('Token mal formado');
-    acumulado = (acumulado << 6) | valor;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      salida += String.fromCharCode((acumulado >> bits) & 0xff);
-    }
-  }
-  return salida;
-}
 
 /** Una sola renovación a la vez: rota el token, y dos simultáneas harían fallar a la segunda. */
 let renovacionEnCurso: Promise<SesionAbierta | null> | null = null;
@@ -117,27 +96,6 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     [aplicar],
   );
 
-  const iniciarConToken = useCallback(async (token: string) => {
-    const cuerpo = token.trim().split('.')[1];
-    if (!cuerpo) throw new Error('El token no tiene el formato esperado');
-    const datos = JSON.parse(decodificarBase64Url(cuerpo)) as { sub?: string; roles?: AsignacionRol[] };
-    if (!datos.sub || !Array.isArray(datos.roles)) throw new Error('El token no trae usuario ni roles');
-    fijarToken(token.trim());
-    setUsuario({
-      id: datos.sub,
-      roles: datos.roles,
-      token: token.trim(),
-      email: '',
-      nombre: 'Usuario de prueba',
-      tipoDocumento: null,
-      numeroDocumento: null,
-      fechaNacimiento: null,
-      mfaActivo: false,
-      tienePassword: false,
-      perfilCompleto: true,
-    });
-  }, []);
-
   const recargarPerfil = useCallback(async () => {
     const perfil = await authApi.yo();
     if (perfil) setUsuario((actual) => (actual ? { ...actual, ...perfil } : actual));
@@ -151,8 +109,8 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   }, [limpiar]);
 
   const valor = useMemo(
-    () => ({ usuario, cargando, abrirSesion, iniciarConToken, recargarPerfil, cerrarSesion }),
-    [usuario, cargando, abrirSesion, iniciarConToken, recargarPerfil, cerrarSesion],
+    () => ({ usuario, cargando, abrirSesion, recargarPerfil, cerrarSesion }),
+    [usuario, cargando, abrirSesion, recargarPerfil, cerrarSesion],
   );
   return <ContextoSesion.Provider value={valor}>{children}</ContextoSesion.Provider>;
 }

@@ -13,6 +13,9 @@ const ESTADOS: Record<EstadoTurno, { texto: string; color: string }> = {
   AUSENTE: { texto: 'No se presentó', color: colores.error },
 };
 
+/** Próximo y ya confirmado: deja de pedir la confirmación y lo dice en verde, como el mensaje de arriba. */
+const PROXIMO_CONFIRMADO = { texto: 'Ya casi: confirmaste que vas', color: colores.exito };
+
 function textoPosicion(turno: Turno): string {
   if (turno.estado === 'LLAMADO') return 'Acércate a la ventanilla';
   if (turno.estado === 'EN_ATENCION') return 'Te están atendiendo';
@@ -23,9 +26,24 @@ function textoPosicion(turno: Turno): string {
   return `${turno.personasDelante} ${turno.personasDelante === 1 ? 'persona' : 'personas'} delante${espera}`;
 }
 
-/** `lugar`: agencia y servicio según el catálogo, por ejemplo «Caja · Agencia Mocoa». */
-export function TarjetaTurno({ turno, titulo = 'Tu turno', desactualizado, lugar }: { turno: Turno; titulo?: string; desactualizado?: string; lugar?: string }) {
-  const estado = ESTADOS[turno.estado];
+/**
+ * `lugar`: agencia y servicio según el catálogo, por ejemplo «Caja · Agencia Mocoa».
+ * `confirmado`: el asociado ya confirmó que va (cambia la etiqueta del estado Próximo).
+ */
+export function TarjetaTurno({
+  turno,
+  titulo = 'Tu turno',
+  desactualizado,
+  lugar,
+  confirmado = false,
+}: {
+  turno: Turno;
+  titulo?: string;
+  desactualizado?: string;
+  lugar?: string;
+  confirmado?: boolean;
+}) {
+  const estado = turno.estado === 'PROXIMO' && confirmado ? PROXIMO_CONFIRMADO : ESTADOS[turno.estado];
   return (
     <View style={estilos.tarjeta} accessible accessibilityLabel={`${titulo} ${turno.codigo ?? ''}, ${estado.texto}`}>
       {/* El número del turno se ve como el logo: placa verde con letras doradas (5,4:1). */}

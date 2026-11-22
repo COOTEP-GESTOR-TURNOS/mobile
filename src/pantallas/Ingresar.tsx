@@ -1,6 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { authApi, type Paso, type ResultadoIngreso } from '../api/auth';
 import { ErrorApi, mensajeDeError } from '../api/http';
 import { Boton } from '../componentes/Boton';
@@ -66,10 +66,8 @@ function Credenciales({
   errorExterno: string | null;
   irA: (pantalla: 'registro' | 'recuperar') => void;
 }) {
-  const { iniciarConToken } = useSesion();
   const [correo, setCorreo] = useState('');
   const [clave, setClave] = useState('');
-  const [tokenPrueba, setTokenPrueba] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sinVerificar, setSinVerificar] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -113,14 +111,6 @@ function Credenciales({
       <Boton titulo="Continuar con Google" variante="secundario" onPress={conGoogle} />
       <Enlace texto="¿Olvidaste tu contraseña?" onPress={() => irA('recuperar')} />
       <Enlace texto="Soy asociado y quiero crear mi cuenta" onPress={() => irA('registro')} />
-
-      {__DEV__ && (
-        <View style={estilos.desarrollo}>
-          <Text style={estilos.etiqueta}>Token de prueba (npm run token:dev en el backend)</Text>
-          <TextInput style={estilos.areaToken} value={tokenPrueba} onChangeText={setTokenPrueba} multiline autoCapitalize="none" accessibilityLabel="Token de prueba" />
-          <Boton titulo="Usar token" variante="secundario" onPress={() => void iniciarConToken(tokenPrueba).catch((e: Error) => setError(e.message))} />
-        </View>
-      )}
     </View>
   );
 }
@@ -216,14 +206,4 @@ const estilos = StyleSheet.create({
   qr: { width: 200, height: 200, alignSelf: 'center', marginTop: espacio[3] },
   enlace: { minHeight: objetivoTactil, justifyContent: 'center', alignItems: 'center' },
   textoEnlace: { color: colores.primario, fontSize: texto.md, textDecorationLine: 'underline' },
-  desarrollo: { marginTop: espacio[6], borderTopWidth: 1, borderTopColor: colores.borde, paddingTop: espacio[4] },
-  areaToken: {
-    minHeight: 96,
-    borderWidth: 1,
-    borderColor: colores.borde,
-    borderRadius: radio,
-    paddingHorizontal: espacio[3],
-    backgroundColor: colores.superficie,
-    color: colores.texto,
-  },
 });

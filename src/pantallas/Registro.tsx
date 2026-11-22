@@ -11,12 +11,17 @@ import { Enlace } from './Ingresar';
 /** Registro público de asociados (igual que en la web). */
 export function Registro({ volver }: { volver: () => void }) {
   const [datos, setDatos] = useState({ nombre: '', email: '', tipoDocumento: 'CC' as TipoDocumento, numeroDocumento: '', clave: '' });
+  const [confirmacion, setConfirmacion] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [enviado, setEnviado] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
 
   async function registrar() {
     setError(null);
+    if (datos.clave !== confirmacion) {
+      setError('Las contraseñas no coinciden');
+      return;
+    }
     setCargando(true);
     try {
       const r = await authApi.registro(datos);
@@ -52,6 +57,7 @@ export function Registro({ volver }: { volver: () => void }) {
         clave
         ayuda="Mínimo 15 caracteres. Una frase fácil de recordar es más segura."
       />
+      <Campo etiqueta="Repite la contraseña" value={confirmacion} onChangeText={setConfirmacion} clave />
       {error && <Aviso>{error}</Aviso>}
       <Boton titulo="Crear cuenta" onPress={() => void registrar()} cargando={cargando} />
       <Enlace texto="Ya tengo cuenta" onPress={volver} />
