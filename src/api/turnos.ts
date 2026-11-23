@@ -31,6 +31,8 @@ export const turnosApi = {
       cabeceras: { 'Idempotency-Key': idempotencyKey },
     }),
   miTurno: () => pedir<Turno>('GET', '/turnos/mio'),
+  /** CU-04: el turno llamado o en atención de este funcionario; null si no tiene. */
+  enVentanilla: () => pedir<Turno>('GET', '/turnos/en-ventanilla'),
   confirmar: (id: string) => pedir<Turno>('POST', `/turnos/${id}/confirmar`),
   cancelar: (id: string) => pedir<Turno>('POST', `/turnos/${id}/cancelar`),
   llamarSiguiente: (agenciaId: string, servicioId: string) =>
