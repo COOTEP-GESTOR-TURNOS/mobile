@@ -30,8 +30,6 @@ export function Asociado() {
   const [accion, setAccion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-  // El backend no informa si el turno ya se confirmó: se recuerda en el teléfono (SQLite).
-  const [confirmadoId, setConfirmadoId] = useState<string | null>(null);
   const claveIdempotencia = useRef(Crypto.randomUUID());
   const estadoAnterior = useRef<string | null>(null);
   const socket = useRef<Socket | null>(null);
@@ -63,7 +61,6 @@ export function Asociado() {
   useEffect(() => {
     void refrescar();
     void almacenLocal.leerPreferencia('agencia').then(setAgenciaGuardada);
-    void almacenLocal.leerPreferencia('turnoConfirmado').then(setConfirmadoId);
   }, [refrescar]);
 
   useEffect(() => {
@@ -134,14 +131,12 @@ export function Asociado() {
   function confirmar(id: string) {
     void ejecutar('confirmar', async () => {
       await turnosApi.confirmar(id);
-      setConfirmadoId(id);
       setAviso(null); // el aviso de «confirma que vas» ya no aplica
-      await almacenLocal.guardarPreferencia('turnoConfirmado', id);
     });
   }
 
   // Confirmado y aún esperando: el mensaje se actualiza con la posición en vivo.
-  const confirmado = turno !== null && turno.id === confirmadoId && ['SOLICITADO', 'EN_ESPERA', 'PROXIMO'].includes(turno.estado);
+  const confirmado = turno !== null && turno.confirmado && ['SOLICITADO', 'EN_ESPERA', 'PROXIMO'].includes(turno.estado);
 
   function cancelar() {
     if (!turno) return;

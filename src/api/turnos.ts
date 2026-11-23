@@ -19,6 +19,8 @@ export interface Turno {
   servicioId: string;
   personasDelante: number | null;
   esperaEstimadaMin?: number | null;
+  /** RN-10: ya confirmó que va. Lo dice el servidor, así que vale en todos sus dispositivos. */
+  confirmado: boolean;
   /** Por qué terminó: SIN_CONFIRMAR, NO_SE_PRESENTO, CANCELADO_POR_ASOCIADO, ... */
   motivo?: string | null;
 }
@@ -31,8 +33,6 @@ export const turnosApi = {
       cabeceras: { 'Idempotency-Key': idempotencyKey },
     }),
   miTurno: () => pedir<Turno>('GET', '/turnos/mio'),
-  /** CU-04: el turno llamado o en atención de este funcionario; null si no tiene. */
-  enVentanilla: () => pedir<Turno>('GET', '/turnos/en-ventanilla'),
   confirmar: (id: string) => pedir<Turno>('POST', `/turnos/${id}/confirmar`),
   cancelar: (id: string) => pedir<Turno>('POST', `/turnos/${id}/cancelar`),
   llamarSiguiente: (agenciaId: string, servicioId: string) =>
@@ -65,8 +65,9 @@ export function mensajeTurnoActivo(t: Pick<Turno, 'codigo' | 'estado'>, lugar?: 
  * Aviso para el asociado cuando su turno cambia por algo que él no hizo (RN-10, RN-11): la
  * pantalla vuelve al formulario y sin este texto no sabría por qué.
  */
-export function avisoDeCambio(t: Pick<Turno, 'estado' | 'codigo' | 'motivo'>): string | null {
+export function avisoDeCambio(t: Pick<Turno, 'estado' | 'codigo' | 'motivo'> & Partial<Pick<Turno, 'confirmado'>>): string | null {
   const codigo = t.codigo ? `Tu turno ${t.codigo}` : 'Tu turno';
+  if (t.estado === 'PROXIMO' && t.confirmado) return null; // ya confirmó: no se le pide otra vez
   if (t.estado === 'PROXIMO') return `${codigo} está cerca. Confirma que vas para no perderlo.`;
   if (t.estado === 'LLAMADO') return `${codigo} fue llamado. Acércate a la ventanilla.`;
   if (t.estado === 'AUSENTE' && t.motivo === 'SIN_CONFIRMAR') return `${codigo} quedó ausente porque no confirmaste a tiempo. Puedes pedir uno nuevo.`;
