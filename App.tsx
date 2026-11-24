@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ComponentType, type ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Aviso } from './src/componentes/Campo';
@@ -15,7 +15,7 @@ import { Indicadores } from './src/pantallas/Indicadores';
 import { Ingresar } from './src/pantallas/Ingresar';
 import { MiCuenta } from './src/pantallas/MiCuenta';
 import { Recuperar, Registro } from './src/pantallas/Registro';
-import { ProveedorSesion, useSesion } from './src/sesion';
+import { ProveedorSesion, type Rol, type Usuario, useSesion } from './src/sesion';
 import { colores, espacio, objetivoTactil, radio, texto } from './src/tema/tokens';
 
 // Cierra la pestaña del navegador cuando Google devuelve el control a la app.
@@ -64,6 +64,43 @@ function Acceso() {
   );
 }
 
+/**
+ * Secciones del menú en orden. permitidos: los roles que la ven (null: todos). El nombre puede
+ * depender de los roles: el superadministrador ve «Agencias»; el directivo, «Mi agencia».
+ */
+const SECCIONES: { id: Seccion; permitidos: Rol[] | null; nombre: string | ((roles: Rol[]) => string) }[] = [
+  { id: 'administracion', permitidos: ['SUPERADMIN', 'ADMIN_AGENCIA'], nombre: 'Usuarios' },
+  { id: 'agencia', permitidos: ['SUPERADMIN', 'ADMIN_AGENCIA'], nombre: (roles) => (roles.includes('SUPERADMIN') ? 'Agencias' : 'Mi agencia') },
+  { id: 'indicadores', permitidos: ['SUPERADMIN', 'ADMIN_AGENCIA'], nombre: 'Indicadores' },
+  { id: 'auditoria', permitidos: ['SUPERADMIN'], nombre: 'Auditoría' },
+  { id: 'atencion', permitidos: ['FUNCIONARIO', 'ADMIN_AGENCIA'], nombre: 'Atención' },
+  { id: 'turno', permitidos: ['ASOCIADO'], nombre: 'Mi turno' },
+  { id: 'cuenta', permitidos: null, nombre: 'Mi cuenta' },
+];
+
+const PANTALLAS: Record<Seccion, ComponentType> = {
+  administracion: Administracion,
+  agencia: Agencia,
+  indicadores: Indicadores,
+  auditoria: Auditoria,
+  atencion: Funcionario,
+  turno: Asociado,
+  cuenta: MiCuenta,
+};
+
+function seccionesPara(roles: Rol[]): { id: Seccion; nombre: string }[] {
+  return SECCIONES.filter((s) => !s.permitidos || s.permitidos.some((r) => roles.includes(r))).map((s) => ({
+    id: s.id,
+    nombre: typeof s.nombre === 'function' ? s.nombre(roles) : s.nombre,
+  }));
+}
+
+/** Una cuenta creada con Google llega sin documento: la app abre primero Mi cuenta para completarlo. */
+function seccionActual(elegida: Seccion | null, secciones: { id: Seccion }[], perfilCompleto: boolean): Seccion {
+  const inicial = perfilCompleto ? secciones[0].id : 'cuenta';
+  return elegida && secciones.some((s) => s.id === elegida) ? elegida : inicial;
+}
+
 /** Cada rol ve sus secciones; el backend vuelve a verificar los permisos en cada API. */
 function PantallaPorRol() {
   const { usuario, cargando, cerrarSesion } = useSesion();
@@ -87,25 +124,14 @@ function PantallaPorRol() {
       </Desplazable>
     );
   }
+  return <ConSesion usuario={usuario} elegida={elegida} elegir={setElegida} salir={() => void cerrarSesion()} />;
+}
 
-  const roles = usuario.roles.map((r) => r.rol);
-  const secciones: { id: Seccion; nombre: string }[] = [
-    ...(roles.includes('SUPERADMIN') || roles.includes('ADMIN_AGENCIA')
-      ? [
-          { id: 'administracion' as const, nombre: 'Usuarios' },
-          { id: 'agencia' as const, nombre: roles.includes('SUPERADMIN') ? 'Agencias' : 'Mi agencia' },
-          { id: 'indicadores' as const, nombre: 'Indicadores' },
-        ]
-      : []),
-    ...(roles.includes('SUPERADMIN') ? [{ id: 'auditoria' as const, nombre: 'Auditoría' }] : []),
-    ...(roles.includes('FUNCIONARIO') || roles.includes('ADMIN_AGENCIA') ? [{ id: 'atencion' as const, nombre: 'Atención' }] : []),
-    ...(roles.includes('ASOCIADO') ? [{ id: 'turno' as const, nombre: 'Mi turno' }] : []),
-    { id: 'cuenta' as const, nombre: 'Mi cuenta' },
-  ];
-  // Una cuenta creada con Google llega sin documento: la app abre primero Mi cuenta para completarlo.
-  const inicial = usuario.perfilCompleto ? secciones[0].id : 'cuenta';
-  const actual = elegida && secciones.some((s) => s.id === elegida) ? elegida : inicial;
+function ConSesion({ usuario, elegida, elegir, salir }: { usuario: Usuario; elegida: Seccion | null; elegir: (seccion: Seccion) => void; salir: () => void }) {
+  const secciones = seccionesPara(usuario.roles.map((r) => r.rol));
+  const actual = seccionActual(elegida, secciones, usuario.perfilCompleto);
   const conMenu = secciones.length > 1;
+  const Pantalla = PANTALLAS[actual];
 
   return (
     <View style={estilos.fondo}>
@@ -114,30 +140,24 @@ function PantallaPorRol() {
         <Text style={estilos.saludo}>Hola, {usuario.nombre}</Text>
         {!usuario.perfilCompleto && actual !== 'cuenta' && <Aviso tipo="info">Te falta tu documento: complétalo en Mi cuenta.</Aviso>}
         <View style={{ marginTop: espacio[4] }}>
-          {actual === 'administracion' && <Administracion />}
-          {actual === 'agencia' && <Agencia />}
-          {actual === 'indicadores' && <Indicadores />}
-          {actual === 'auditoria' && <Auditoria />}
-          {actual === 'atencion' && <Funcionario />}
-          {actual === 'turno' && <Asociado />}
-          {actual === 'cuenta' && <MiCuenta />}
+          <Pantalla />
         </View>
         {/* Cerrar sesión vive en Mi cuenta, como en la mayoría de apps con menú inferior */}
-        {actual === 'cuenta' && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void cerrarSesion()}
-            style={({ pressed }) => [estilos.salir, pressed && { opacity: 0.7 }]}
-          >
-            <Ionicons name="log-out-outline" size={20} color={colores.error} />
-            <Text style={estilos.textoSalir}>Cerrar sesión</Text>
-          </Pressable>
-        )}
+        {actual === 'cuenta' && <BotonSalir salir={salir} />}
       </Desplazable>
       {conMenu && (
-        <MenuInferior opciones={secciones.map((s) => ({ ...s, icono: ICONOS[s.id] }))} valor={actual} onCambio={setElegida} />
+        <MenuInferior opciones={secciones.map((s) => ({ ...s, icono: ICONOS[s.id] }))} valor={actual} onCambio={elegir} />
       )}
     </View>
+  );
+}
+
+function BotonSalir({ salir }: { salir: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={salir} style={({ pressed }) => [estilos.salir, pressed && { opacity: 0.7 }]}>
+      <Ionicons name="log-out-outline" size={20} color={colores.error} />
+      <Text style={estilos.textoSalir}>Cerrar sesión</Text>
+    </Pressable>
   );
 }
 

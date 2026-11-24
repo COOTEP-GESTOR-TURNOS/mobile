@@ -15,11 +15,8 @@ const DIAS: { id: '0' | '-1'; nombre: string }[] = [
   { id: '-1', nombre: 'Ayer' },
 ];
 
-/** RF-20 en el teléfono: la auditoría de un ámbito y un día, solo para el superadministrador. */
-export function Auditoria() {
-  const { agencias } = useCatalogo();
-  const [ambito, setAmbito] = useState('GLOBAL');
-  const [dia, setDia] = useState<'0' | '-1'>('0');
+/** Registros del ámbito y el día, con «cargar más» por páginas. */
+function useRegistrosAuditoria(ambito: string, dia: '0' | '-1') {
   const [entradas, setEntradas] = useState<EntradaAuditoria[]>([]);
   const [siguiente, setSiguiente] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -63,6 +60,17 @@ export function Auditoria() {
     }
   }
 
+  return { entradas, siguiente, cargando, error, cargarMas };
+}
+
+/** RF-20 en el teléfono: la auditoría de un ámbito y un día, solo para el superadministrador. */
+export function Auditoria() {
+  const { agencias } = useCatalogo();
+  const [ambito, setAmbito] = useState('GLOBAL');
+  const [dia, setDia] = useState<'0' | '-1'>('0');
+  const { entradas, siguiente, cargando, error, cargarMas } = useRegistrosAuditoria(ambito, dia);
+  const sinRegistros = !cargando && entradas.length === 0 && !error;
+
   return (
     <View>
       <Text style={estilos.titulo}>Auditoría</Text>
@@ -74,34 +82,53 @@ export function Auditoria() {
       />
       <Opciones titulo="Día" opciones={DIAS} valor={dia} onCambio={setDia} />
       {error && <Aviso>{error}</Aviso>}
-      <Text style={estilos.subtitulo}>
-        {entradas.length} {entradas.length === 1 ? 'registro' : 'registros'}
-        {siguiente ? ' (hay más)' : ''}
-      </Text>
-      {!cargando && entradas.length === 0 && !error && <Text style={estilos.nota}>No hay registros ese día.</Text>}
+      <Text style={estilos.subtitulo}>{tituloRegistros(entradas.length, Boolean(siguiente))}</Text>
+      {sinRegistros && <Text style={estilos.nota}>No hay registros ese día.</Text>}
       {entradas.map((e) => (
-        <View
-          key={`${e.ocurridoEn}-${e.accion}-${e.objetivoId}`}
-          style={[estilos.registro, ACCIONES_ALERTA.has(e.accion) && { borderLeftColor: colores.error }]}
-          accessible
-          accessibilityLabel={`${horaColombia(e.ocurridoEn)}, ${NOMBRE_ACCION[e.accion] ?? e.accion}, ${e.actor.nombre ?? 'correo desconocido'}`}
-        >
-          <Text style={estilos.accion}>
-            {horaColombia(e.ocurridoEn)} · {NOMBRE_ACCION[e.accion] ?? e.accion}
-          </Text>
-          <Text style={estilos.nota}>
-            {e.actor.nombre ?? (e.actor.rol === 'SISTEMA' ? 'Sistema (automático)' : 'Correo desconocido')}
-            {e.actor.rol ? ` · ${e.actor.rol}` : ''}
-          </Text>
-          <Text style={estilos.nota}>
-            {e.objetivoTipo ? `${e.objetivoTipo}: ` : ''}
-            {e.objetivoId}
-          </Text>
-          {describirDetalle(e.detalle) ? <Text style={estilos.nota}>{describirDetalle(e.detalle)}</Text> : null}
-        </View>
+        <Registro key={`${e.ocurridoEn}-${e.accion}-${e.objetivoId}`} entrada={e} />
       ))}
-      {cargando && <Text style={estilos.nota}>Cargando…</Text>}
-      {siguiente && !cargando && <Boton titulo="Cargar más" variante="secundario" onPress={() => void cargarMas()} />}
+      <PieRegistros cargando={cargando} hayMas={Boolean(siguiente)} cargarMas={() => void cargarMas()} />
+    </View>
+  );
+}
+
+function tituloRegistros(cantidad: number, hayMas: boolean): string {
+  return `${cantidad} ${cantidad === 1 ? 'registro' : 'registros'}${hayMas ? ' (hay más)' : ''}`;
+}
+
+function PieRegistros({ cargando, hayMas, cargarMas }: { cargando: boolean; hayMas: boolean; cargarMas: () => void }) {
+  if (cargando) return <Text style={estilos.nota}>Cargando…</Text>;
+  if (!hayMas) return null;
+  return <Boton titulo="Cargar más" variante="secundario" onPress={cargarMas} />;
+}
+
+/** Quién lo hizo: la persona, el sistema o un correo que no existe. */
+function quienLoHizo(actor: EntradaAuditoria['actor']): string {
+  return actor.nombre ?? (actor.rol === 'SISTEMA' ? 'Sistema (automático)' : 'Correo desconocido');
+}
+
+/** Las acciones que merecen atención (accesos denegados, bloqueos) llevan el borde rojo. */
+function Registro({ entrada: e }: { entrada: EntradaAuditoria }) {
+  const accion = NOMBRE_ACCION[e.accion] ?? e.accion;
+  const detalle = describirDetalle(e.detalle);
+  return (
+    <View
+      style={[estilos.registro, ACCIONES_ALERTA.has(e.accion) && { borderLeftColor: colores.error }]}
+      accessible
+      accessibilityLabel={`${horaColombia(e.ocurridoEn)}, ${accion}, ${e.actor.nombre ?? 'correo desconocido'}`}
+    >
+      <Text style={estilos.accion}>
+        {horaColombia(e.ocurridoEn)} · {accion}
+      </Text>
+      <Text style={estilos.nota}>
+        {quienLoHizo(e.actor)}
+        {e.actor.rol ? ` · ${e.actor.rol}` : ''}
+      </Text>
+      <Text style={estilos.nota}>
+        {e.objetivoTipo ? `${e.objetivoTipo}: ` : ''}
+        {e.objetivoId}
+      </Text>
+      {detalle ? <Text style={estilos.nota}>{detalle}</Text> : null}
     </View>
   );
 }

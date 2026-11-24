@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { mensajeDeError } from '../api/http';
-import { fechaColombia, type RecomendacionHorario, recomendacionesApi, textoEspera } from '../api/recomendaciones';
+import { fechaColombia, type FranjaRecomendada, type RecomendacionHorario, recomendacionesApi, textoEspera } from '../api/recomendaciones';
 import { colores, espacio, radio, texto } from '../tema/tokens';
 import { Opciones } from './Opciones';
 
@@ -10,9 +10,8 @@ const DIAS: { id: '0' | '1'; nombre: string }[] = [
   { id: '1', nombre: 'Mañana' },
 ];
 
-/** RF-10 en el teléfono: las tres franjas con menor espera histórica para la fila elegida. */
-export function MejorHorario({ agenciaId, servicioId }: { agenciaId: string; servicioId: string }) {
-  const [dia, setDia] = useState<'0' | '1'>('0');
+/** Consulta la recomendación de la fila y el día; ignora respuestas de una fila o un día que ya no está elegido. */
+function useRecomendacion(agenciaId: string, servicioId: string, dia: '0' | '1') {
   const [datos, setDatos] = useState<RecomendacionHorario | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -32,6 +31,14 @@ export function MejorHorario({ agenciaId, servicioId }: { agenciaId: string; ser
     };
   }, [agenciaId, servicioId, dia]);
 
+  return { datos, error, cargando };
+}
+
+/** RF-10 en el teléfono: las tres franjas con menor espera histórica para la fila elegida. */
+export function MejorHorario({ agenciaId, servicioId }: { agenciaId: string; servicioId: string }) {
+  const [dia, setDia] = useState<'0' | '1'>('0');
+  const { datos, error, cargando } = useRecomendacion(agenciaId, servicioId, dia);
+
   return (
     <View style={estilos.caja}>
       <Text style={estilos.titulo} accessibilityRole="header">
@@ -39,37 +46,66 @@ export function MejorHorario({ agenciaId, servicioId }: { agenciaId: string; ser
       </Text>
       <Opciones titulo="Día" opciones={DIAS} valor={dia} onCambio={setDia} />
       <View accessibilityLiveRegion="polite">
-        {cargando && <Text style={estilos.nota}>Buscando las franjas con menos espera…</Text>}
-        {!cargando && error && <Text style={estilos.nota}>{error}</Text>}
-        {!cargando && datos && !datos.disponible && <Text style={estilos.nota}>La recomendación no está disponible ahora. Puedes pedir tu turno igual.</Text>}
-        {!cargando && datos?.disponible && datos.franjas.length === 0 && (
-          <Text style={estilos.nota}>{dia === '0' ? 'Hoy ya no quedan franjas con datos suficientes. Mira las de mañana.' : 'Aún no hay historial suficiente para ese día.'}</Text>
-        )}
-        {!cargando &&
-          datos?.disponible &&
-          datos.franjas.map((f, i) => (
-            <View
-              key={f.desde}
-              style={[estilos.franja, i === 0 && estilos.franjaRecomendada]}
-              accessible
-              accessibilityLabel={`Opción ${i + 1}${i === 0 ? ', recomendada' : ''}: de ${f.desde} a ${f.hasta}, ${textoEspera(f.esperaMedianaMin)}`}
-            >
-              <View style={estilos.encabezadoFranja}>
-                <Text style={estilos.hora}>
-                  {i + 1}. {f.desde} a {f.hasta}
-                </Text>
-                {i === 0 && <Text style={estilos.recomendada}>Recomendada</Text>}
-              </View>
-              <Text style={estilos.espera}>{textoEspera(f.esperaMedianaMin)}</Text>
-              <Text style={estilos.nota}>según {f.turnos} turnos anteriores</Text>
-            </View>
-          ))}
+        {cargando ? <Text style={estilos.nota}>Buscando las franjas con menos espera…</Text> : <Resultado datos={datos} error={error} dia={dia} />}
       </View>
       {datos && (
         <Text style={estilos.nota}>
           Horario de atención: {datos.horario.apertura} a {datos.horario.cierre}. Es la espera mediana de días parecidos, no una promesa.
         </Text>
       )}
+    </View>
+  );
+}
+
+/** Sin franjas que mostrar aunque la recomendación esté disponible. */
+function mensajeSinFranjas(datos: RecomendacionHorario | null, dia: '0' | '1'): string | null {
+  if (!datos?.disponible || datos.franjas.length > 0) return null;
+  return dia === '0' ? 'Hoy ya no quedan franjas con datos suficientes. Mira las de mañana.' : 'Aún no hay historial suficiente para ese día.';
+}
+
+/** Los mensajes que explican por qué no hay franjas (o el error de la consulta). */
+function mensajesVacios(datos: RecomendacionHorario | null, error: string | null, dia: '0' | '1'): string[] {
+  const sinFranjas = mensajeSinFranjas(datos, dia);
+  return [
+    ...(error ? [error] : []),
+    ...(datos && !datos.disponible ? ['La recomendación no está disponible ahora. Puedes pedir tu turno igual.'] : []),
+    ...(sinFranjas ? [sinFranjas] : []),
+  ];
+}
+
+function Resultado({ datos, error, dia }: { datos: RecomendacionHorario | null; error: string | null; dia: '0' | '1' }) {
+  const franjas = datos?.disponible ? datos.franjas : [];
+  return (
+    <>
+      {mensajesVacios(datos, error, dia).map((mensaje) => (
+        <Text key={mensaje} style={estilos.nota}>
+          {mensaje}
+        </Text>
+      ))}
+      {franjas.map((f, i) => (
+        <Franja key={f.desde} franja={f} posicion={i + 1} />
+      ))}
+    </>
+  );
+}
+
+/** La primera franja es la recomendada: se destaca en dorado. */
+function Franja({ franja: f, posicion }: { franja: FranjaRecomendada; posicion: number }) {
+  const recomendada = posicion === 1;
+  return (
+    <View
+      style={[estilos.franja, recomendada && estilos.franjaRecomendada]}
+      accessible
+      accessibilityLabel={`Opción ${posicion}${recomendada ? ', recomendada' : ''}: de ${f.desde} a ${f.hasta}, ${textoEspera(f.esperaMedianaMin)}`}
+    >
+      <View style={estilos.encabezadoFranja}>
+        <Text style={estilos.hora}>
+          {posicion}. {f.desde} a {f.hasta}
+        </Text>
+        {recomendada && <Text style={estilos.recomendada}>Recomendada</Text>}
+      </View>
+      <Text style={estilos.espera}>{textoEspera(f.esperaMedianaMin)}</Text>
+      <Text style={estilos.nota}>según {f.turnos} turnos anteriores</Text>
     </View>
   );
 }

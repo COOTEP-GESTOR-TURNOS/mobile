@@ -4,7 +4,7 @@ import { Alert, StyleSheet, Switch, Text, Vibration, View } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { almacenLocal } from '../almacenamiento/local';
 import { ErrorApi } from '../api/http';
-import { agenciasAbiertas, describirFila, servicioParaAgencia, serviciosDe } from '../api/catalogo';
+import { type AgenciaCatalogo, agenciasAbiertas, describirFila, servicioParaAgencia, serviciosDe } from '../api/catalogo';
 import { avisoDeCambio, mensajeConfirmado, mensajeTurnoActivo, Turno, turnosApi } from '../api/turnos';
 import { useCatalogo } from '../api/useCatalogo';
 import { Boton } from '../componentes/Boton';
@@ -13,24 +13,22 @@ import { MejorHorario } from '../componentes/MejorHorario';
 import { Desplegable } from '../componentes/Desplegable';
 import { TarjetaTurno } from '../componentes/TarjetaTurno';
 import { API_URL } from '../config';
-import { useSesion } from '../sesion';
+import { type Usuario, useSesion } from '../sesion';
 import { colores, espacio, texto } from '../tema/tokens';
 
-/** CU-02 y CU-03 en el teléfono: pedir, seguir, confirmar y cancelar el turno. */
-export function Asociado() {
-  const { usuario } = useSesion();
+/** Estados en los que el turno sigue en la fila (se puede cancelar). */
+const EN_FILA = ['SOLICITADO', 'EN_ESPERA', 'PROXIMO'];
+
+/** Confirmado y aún esperando: el mensaje se actualiza con la posición en vivo. */
+function estaConfirmado(turno: Turno | null): boolean {
+  return turno !== null && turno.confirmado && EN_FILA.includes(turno.estado);
+}
+
+/** El turno activo: se lee al abrir, se sigue en vivo por el socket y, sin conexión, se muestra la copia guardada. */
+function useMiTurno(usuario: Usuario | null) {
   const [turno, setTurno] = useState<Turno | null>(null);
   const [desactualizado, setDesactualizado] = useState<string | undefined>();
-  const catalogo = useCatalogo();
-  const abiertas = useMemo(() => agenciasAbiertas(catalogo.agencias), [catalogo.agencias]);
-  const [agenciaId, setAgenciaId] = useState('');
-  const [servicioId, setServicioId] = useState('');
-  const [agenciaGuardada, setAgenciaGuardada] = useState<string | null>(null);
-  const [preferencial, setPreferencial] = useState(false);
-  const [accion, setAccion] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-  const claveIdempotencia = useRef(Crypto.randomUUID());
   const estadoAnterior = useRef<string | null>(null);
   const socket = useRef<Socket | null>(null);
 
@@ -60,7 +58,6 @@ export function Asociado() {
 
   useEffect(() => {
     void refrescar();
-    void almacenLocal.leerPreferencia('agencia').then(setAgenciaGuardada);
   }, [refrescar]);
 
   useEffect(() => {
@@ -90,7 +87,19 @@ export function Asociado() {
     estadoAnterior.current = turno.estado;
   }, [turno]);
 
-  // Al llegar el catálogo elige la última agencia usada (si sigue abierta) o la primera.
+  return { turno, desactualizado, aviso, setAviso, refrescar };
+}
+
+/** Al llegar el catálogo elige la última agencia usada (si sigue abierta) o la primera. */
+function useFilaInicial(abiertas: AgenciaCatalogo[]) {
+  const [agenciaId, setAgenciaId] = useState('');
+  const [servicioId, setServicioId] = useState('');
+  const [agenciaGuardada, setAgenciaGuardada] = useState<string | null>(null);
+
+  useEffect(() => {
+    void almacenLocal.leerPreferencia('agencia').then(setAgenciaGuardada);
+  }, []);
+
   useEffect(() => {
     if (agenciaId || abiertas.length === 0) return;
     const inicial = abiertas.find((a) => a.id === agenciaGuardada)?.id ?? abiertas[0].id;
@@ -102,6 +111,24 @@ export function Asociado() {
     setAgenciaId(id);
     setServicioId(servicioParaAgencia(abiertas, id, servicioId) ?? '');
   }
+
+  return { agenciaId, servicioId, setServicioId, elegirAgencia };
+}
+
+type Fila = ReturnType<typeof useFilaInicial>;
+type Catalogo = ReturnType<typeof useCatalogo>;
+
+/** CU-02 y CU-03 en el teléfono: pedir, seguir, confirmar y cancelar el turno. */
+export function Asociado() {
+  const { usuario } = useSesion();
+  const { turno, desactualizado, aviso, setAviso, refrescar } = useMiTurno(usuario);
+  const catalogo = useCatalogo();
+  const abiertas = useMemo(() => agenciasAbiertas(catalogo.agencias), [catalogo.agencias]);
+  const fila = useFilaInicial(abiertas);
+  const [preferencial, setPreferencial] = useState(false);
+  const [accion, setAccion] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const claveIdempotencia = useRef(Crypto.randomUUID());
 
   async function ejecutar(nombre: string, operacion: () => Promise<unknown>) {
     setAccion(nombre);
@@ -121,9 +148,9 @@ export function Asociado() {
 
   function pedirTurno() {
     setAviso(null);
-    void almacenLocal.guardarPreferencia('agencia', agenciaId);
+    void almacenLocal.guardarPreferencia('agencia', fila.agenciaId);
     void ejecutar('pedir', async () => {
-      await turnosApi.solicitar(agenciaId, servicioId, preferencial, claveIdempotencia.current);
+      await turnosApi.solicitar(fila.agenciaId, fila.servicioId, preferencial, claveIdempotencia.current);
       claveIdempotencia.current = Crypto.randomUUID();
     });
   }
@@ -135,11 +162,7 @@ export function Asociado() {
     });
   }
 
-  // Confirmado y aún esperando: el mensaje se actualiza con la posición en vivo.
-  const confirmado = turno !== null && turno.confirmado && ['SOLICITADO', 'EN_ESPERA', 'PROXIMO'].includes(turno.estado);
-
-  function cancelar() {
-    if (!turno) return;
+  function cancelar(actual: Turno) {
     Alert.alert('Cancelar turno', 'Perderás tu lugar en la fila.', [
       { text: 'Volver', style: 'cancel' },
       {
@@ -147,7 +170,7 @@ export function Asociado() {
         style: 'destructive',
         onPress: () => {
           setAviso(null); // el aviso del turno (por ejemplo, «Ya tienes el turno…») deja de aplicar
-          void ejecutar('cancelar', () => turnosApi.cancelar(turno.id));
+          void ejecutar('cancelar', () => turnosApi.cancelar(actual.id));
         },
       },
     ]);
@@ -155,6 +178,36 @@ export function Asociado() {
 
   return (
     <View>
+      <AvisosTurno aviso={aviso} error={error} />
+      {turno ? (
+        <TurnoActual
+          turno={turno}
+          confirmado={estaConfirmado(turno)}
+          desactualizado={desactualizado}
+          lugar={describirFila(catalogo.agencias, turno.agenciaId, turno.servicioId)}
+          accion={accion}
+          confirmar={() => confirmar(turno.id)}
+          cancelar={() => cancelar(turno)}
+        />
+      ) : (
+        <FormularioPedirTurno
+          catalogo={catalogo}
+          abiertas={abiertas}
+          fila={fila}
+          preferencial={preferencial}
+          setPreferencial={setPreferencial}
+          pidiendo={accion === 'pedir'}
+          pedirTurno={pedirTurno}
+        />
+      )}
+    </View>
+  );
+}
+
+/** El aviso del turno va en dorado; si quedó ausente, en rojo. Los errores, en rojo. */
+function AvisosTurno({ aviso, error }: { aviso: string | null; error: string | null }) {
+  return (
+    <>
       {aviso && (
         <Text style={[estilos.aviso, aviso.includes('ausente') && { color: colores.error, borderColor: colores.error, backgroundColor: colores.superficie }]} accessibilityLiveRegion="assertive">
           {aviso}
@@ -165,75 +218,108 @@ export function Asociado() {
           {error}
         </Text>
       )}
-      {turno ? (
-        <View>
-          {confirmado && (
-            <View style={estilos.separado}>
-              <Aviso tipo="exito">{mensajeConfirmado(turno)}</Aviso>
-            </View>
-          )}
-          <TarjetaTurno
-            turno={turno}
-            confirmado={confirmado}
-            desactualizado={desactualizado}
-            lugar={describirFila(catalogo.agencias, turno.agenciaId, turno.servicioId)}
-          />
-          {turno.estado === 'PROXIMO' && !confirmado && (
-            <Boton titulo="Confirmo que voy" cargando={accion === 'confirmar'} onPress={() => confirmar(turno.id)} />
-          )}
-          {['SOLICITADO', 'EN_ESPERA', 'PROXIMO'].includes(turno.estado) && (
-            <Boton titulo="Cancelar turno" variante="peligro" cargando={accion === 'cancelar'} onPress={cancelar} />
-          )}
-        </View>
-      ) : (
-        <View>
-          <Text style={estilos.titulo}>Pedir turno</Text>
-          {catalogo.cargando && <Text style={estilos.nota}>Cargando agencias…</Text>}
-          {catalogo.error && (
-            <>
-              <Text style={estilos.error} accessibilityLiveRegion="assertive">
-                {catalogo.error}
-              </Text>
-              <Boton titulo="Reintentar" variante="secundario" onPress={catalogo.reintentar} />
-            </>
-          )}
-          {catalogo.desdeCopia && <Text style={estilos.nota}>Sin conexión: se muestran las agencias guardadas en el teléfono.</Text>}
-          {!catalogo.cargando && !catalogo.error && abiertas.length === 0 && (
-            <Text style={estilos.nota}>Ninguna agencia está atendiendo en este momento.</Text>
-          )}
-          {abiertas.length > 0 && (
-            <>
-              <Desplegable
-                titulo="Agencia"
-                marcador="Elige una agencia"
-                opciones={abiertas.map((a) => ({ id: a.id, nombre: a.nombre }))}
-                valor={agenciaId}
-                onCambio={elegirAgencia}
-              />
-              {agenciaId ? (
-                <Desplegable
-                  titulo="Servicio"
-                  marcador="Elige un servicio"
-                  opciones={serviciosDe(abiertas, agenciaId).map((s) => ({
-                    id: s.id,
-                    nombre: s.nombre,
-                    detalle: `${s.ventanillas} ${s.ventanillas === 1 ? 'ventanilla' : 'ventanillas'}`,
-                  }))}
-                  valor={servicioId}
-                  onCambio={setServicioId}
-                />
-              ) : null}
-              {agenciaId && servicioId ? <MejorHorario agenciaId={agenciaId} servicioId={servicioId} /> : null}
-            </>
-          )}
-          <View style={estilos.preferencial}>
-            <Switch value={preferencial} onValueChange={setPreferencial} accessibilityLabel="Necesito atención preferencial" />
-            <Text style={estilos.textoPreferencial}>Necesito atención preferencial (gestante o persona con discapacidad)</Text>
-          </View>
-          <Boton titulo="Pedir turno" cargando={accion === 'pedir'} deshabilitado={!agenciaId || !servicioId} onPress={pedirTurno} />
+    </>
+  );
+}
+
+function TurnoActual({ turno, confirmado, desactualizado, lugar, accion, confirmar, cancelar }: {
+  turno: Turno;
+  confirmado: boolean;
+  desactualizado?: string;
+  lugar?: string;
+  accion: string | null;
+  confirmar: () => void;
+  cancelar: () => void;
+}) {
+  return (
+    <View>
+      {confirmado && (
+        <View style={estilos.separado}>
+          <Aviso tipo="exito">{mensajeConfirmado(turno)}</Aviso>
         </View>
       )}
+      <TarjetaTurno turno={turno} confirmado={confirmado} desactualizado={desactualizado} lugar={lugar} />
+      {turno.estado === 'PROXIMO' && !confirmado && (
+        <Boton titulo="Confirmo que voy" cargando={accion === 'confirmar'} onPress={confirmar} />
+      )}
+      {EN_FILA.includes(turno.estado) && (
+        <Boton titulo="Cancelar turno" variante="peligro" cargando={accion === 'cancelar'} onPress={cancelar} />
+      )}
     </View>
+  );
+}
+
+function FormularioPedirTurno({ catalogo, abiertas, fila, preferencial, setPreferencial, pidiendo, pedirTurno }: {
+  catalogo: Catalogo;
+  abiertas: AgenciaCatalogo[];
+  fila: Fila;
+  preferencial: boolean;
+  setPreferencial: (valor: boolean) => void;
+  pidiendo: boolean;
+  pedirTurno: () => void;
+}) {
+  return (
+    <View>
+      <Text style={estilos.titulo}>Pedir turno</Text>
+      <AvisosCatalogo catalogo={catalogo} sinAgencias={abiertas.length === 0} />
+      {abiertas.length > 0 && <ElegirFila abiertas={abiertas} fila={fila} />}
+      <View style={estilos.preferencial}>
+        <Switch value={preferencial} onValueChange={setPreferencial} accessibilityLabel="Necesito atención preferencial" />
+        <Text style={estilos.textoPreferencial}>Necesito atención preferencial (gestante o persona con discapacidad)</Text>
+      </View>
+      <Boton titulo="Pedir turno" cargando={pidiendo} deshabilitado={!fila.agenciaId || !fila.servicioId} onPress={pedirTurno} />
+    </View>
+  );
+}
+
+/** Cargando, error con «Reintentar», copia guardada o ninguna agencia atendiendo. */
+function AvisosCatalogo({ catalogo, sinAgencias }: { catalogo: Catalogo; sinAgencias: boolean }) {
+  return (
+    <>
+      {catalogo.cargando && <Text style={estilos.nota}>Cargando agencias…</Text>}
+      {catalogo.error && (
+        <>
+          <Text style={estilos.error} accessibilityLiveRegion="assertive">
+            {catalogo.error}
+          </Text>
+          <Boton titulo="Reintentar" variante="secundario" onPress={catalogo.reintentar} />
+        </>
+      )}
+      {catalogo.desdeCopia && <Text style={estilos.nota}>Sin conexión: se muestran las agencias guardadas en el teléfono.</Text>}
+      {!catalogo.cargando && !catalogo.error && sinAgencias && (
+        <Text style={estilos.nota}>Ninguna agencia está atendiendo en este momento.</Text>
+      )}
+    </>
+  );
+}
+
+/** Agencia, servicio y, con los dos elegidos, la mejor hora para ir. */
+function ElegirFila({ abiertas, fila }: { abiertas: AgenciaCatalogo[]; fila: Fila }) {
+  const { agenciaId, servicioId, setServicioId, elegirAgencia } = fila;
+  return (
+    <>
+      <Desplegable
+        titulo="Agencia"
+        marcador="Elige una agencia"
+        opciones={abiertas.map((a) => ({ id: a.id, nombre: a.nombre }))}
+        valor={agenciaId}
+        onCambio={elegirAgencia}
+      />
+      {agenciaId ? (
+        <Desplegable
+          titulo="Servicio"
+          marcador="Elige un servicio"
+          opciones={serviciosDe(abiertas, agenciaId).map((s) => ({
+            id: s.id,
+            nombre: s.nombre,
+            detalle: `${s.ventanillas} ${s.ventanillas === 1 ? 'ventanilla' : 'ventanillas'}`,
+          }))}
+          valor={servicioId}
+          onCambio={setServicioId}
+        />
+      ) : null}
+      {agenciaId && servicioId ? <MejorHorario agenciaId={agenciaId} servicioId={servicioId} /> : null}
+    </>
   );
 }
 

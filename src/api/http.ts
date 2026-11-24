@@ -71,16 +71,28 @@ function enviar(metodo: string, ruta: string, opciones: Opciones): Promise<Respo
   });
 }
 
-export async function pedir<T>(metodo: string, ruta: string, opciones: Opciones = {}): Promise<T | null> {
-  let respuesta = await enviar(metodo, ruta, opciones);
-  if (respuesta.status === 401 && opciones.renovarSi401 !== false && tokenAcceso && renovador) {
-    const nuevo = await renovador().catch(() => null);
-    if (nuevo) respuesta = await enviar(metodo, ruta, opciones);
-  }
+/** El token de acceso dura 10 min: un 401 con sesión abierta se intenta renovar una vez. */
+function debeRenovar(respuesta: Response, opciones: Opciones): boolean {
+  return respuesta.status === 401 && opciones.renovarSi401 !== false && Boolean(tokenAcceso && renovador);
+}
+
+/** Renueva el token con la cookie y repite la petición; si no se pudo, deja la respuesta original. */
+async function renovarYReintentar(metodo: string, ruta: string, opciones: Opciones, respuesta: Response): Promise<Response> {
+  const nuevo = await renovador!().catch(() => null);
+  return nuevo ? enviar(metodo, ruta, opciones) : respuesta;
+}
+
+async function leerRespuesta<T>(respuesta: Response): Promise<T | null> {
   if (respuesta.status === 204) return null;
   const datos = await respuesta.json().catch(() => null);
   if (!respuesta.ok) {
     throw new ErrorApi(respuesta.status, (datos as Problema) ?? { title: 'Error', status: respuesta.status });
   }
   return datos as T;
+}
+
+export async function pedir<T>(metodo: string, ruta: string, opciones: Opciones = {}): Promise<T | null> {
+  let respuesta = await enviar(metodo, ruta, opciones);
+  if (debeRenovar(respuesta, opciones)) respuesta = await renovarYReintentar(metodo, ruta, opciones, respuesta);
+  return leerRespuesta<T>(respuesta);
 }

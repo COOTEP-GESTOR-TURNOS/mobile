@@ -78,10 +78,18 @@ export function resumenCierre(r: Pick<ResultadoCierre, 'cancelados' | 'siguenEnA
 }
 
 /** Valida en el navegador lo mismo que el backend, para avisar antes de enviar. */
-export function errorDeValor(p: Pick<VistaParametro, 'tipo' | 'min' | 'max' | 'nombre'>, valor: string): string | null {
-  if (p.tipo === 'hora') {
-    return /^([01]\d|2[0-3]):(00|30)$/.test(valor) ? null : 'Usa una hora en punto o y media, por ejemplo 08:00 o 13:30';
-  }
+type ReglaValor = Pick<VistaParametro, 'tipo' | 'min' | 'max' | 'nombre'>;
+
+function errorDeHora(valor: string): string | null {
+  return /^([01]\d|2[0-3]):(00|30)$/.test(valor) ? null : 'Usa una hora en punto o y media, por ejemplo 08:00 o 13:30';
+}
+
+function errorDeEntero(p: ReglaValor, valor: string): string | null {
   const n = Number(valor);
-  return Number.isInteger(n) && n >= (p.min ?? -Infinity) && n <= (p.max ?? Infinity) ? null : `Debe ser un número entero entre ${p.min} y ${p.max}`;
+  const valido = Number.isInteger(n) && n >= (p.min ?? -Infinity) && n <= (p.max ?? Infinity);
+  return valido ? null : `Debe ser un número entero entre ${p.min} y ${p.max}`;
+}
+
+export function errorDeValor(p: ReglaValor, valor: string): string | null {
+  return p.tipo === 'hora' ? errorDeHora(valor) : errorDeEntero(p, valor);
 }

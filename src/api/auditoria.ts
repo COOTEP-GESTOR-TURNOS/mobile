@@ -63,22 +63,26 @@ export function horaColombia(iso: string): string {
 }
 
 /** "antes: 3 → después: 4", o las claves y valores en una línea. */
+/** Un valor del detalle en texto. Una asignación de rol se resume con el nombre del rol: la agencia ya es el ámbito del registro. */
+function textoValor(v: unknown): string {
+  if (typeof v !== 'object' || v === null) return String(v);
+  return 'rol' in v && typeof (v as { rol: unknown }).rol === 'string' ? (v as { rol: string }).rol : JSON.stringify(v);
+}
+
+const esCambio = (d: Record<string, unknown>) => 'antes' in d && 'despues' in d;
+const esCierre = (d: Record<string, unknown>) => 'cancelados' in d && 'siguenEnAtencion' in d;
+
+/** Cierre de la jornada (RN-13): lo que importa es cuántos turnos se cancelaron y cuánto tardó el motor. */
+function describirCierre(d: Record<string, unknown>): string {
+  const partes = [`${String(d.cancelados)} cancelados`, `${String(d.siguenEnAtencion)} en atención`, `motor ${String(d.duracionMotorMs)} ms`];
+  return [...partes, ...(d.automatico ? ['automático'] : [])].join(' · ');
+}
+
 export function describirDetalle(detalle: Record<string, unknown> | null): string {
   if (!detalle || Object.keys(detalle).length === 0) return '';
-  // Una asignación de rol se resume con el nombre del rol: la agencia ya es el ámbito del registro.
-  const texto = (v: unknown) =>
-    typeof v === 'object' && v !== null
-      ? 'rol' in v && typeof (v as { rol: unknown }).rol === 'string'
-        ? (v as { rol: string }).rol
-        : JSON.stringify(v)
-      : String(v);
-  if ('antes' in detalle && 'despues' in detalle) return `${texto(detalle.antes)} → ${texto(detalle.despues)}`;
-  // Cierre de la jornada (RN-13): lo que importa es cuántos turnos se cancelaron y cuánto tardó el motor.
-  if ('cancelados' in detalle && 'siguenEnAtencion' in detalle) {
-    const partes = [`${String(detalle.cancelados)} cancelados`, `${String(detalle.siguenEnAtencion)} en atención`, `motor ${String(detalle.duracionMotorMs)} ms`];
-    return [...partes, ...(detalle.automatico ? ['automático'] : [])].join(' · ');
-  }
+  if (esCambio(detalle)) return `${textoValor(detalle.antes)} → ${textoValor(detalle.despues)}`;
+  if (esCierre(detalle)) return describirCierre(detalle);
   return Object.entries(detalle)
-    .map(([k, v]) => `${k}: ${texto(v)}`)
+    .map(([k, v]) => `${k}: ${textoValor(v)}`)
     .join(' · ');
 }

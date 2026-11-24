@@ -16,14 +16,31 @@ const ESTADOS: Record<EstadoTurno, { texto: string; color: string }> = {
 /** Próximo y ya confirmado: deja de pedir la confirmación y lo dice en verde, como el mensaje de arriba. */
 const PROXIMO_CONFIRMADO = { texto: 'Ya casi: confirmaste que vas', color: colores.exito };
 
-function textoPosicion(turno: Turno): string {
-  if (turno.estado === 'LLAMADO') return 'Acércate a la ventanilla';
-  if (turno.estado === 'EN_ATENCION') return 'Te están atendiendo';
-  if (['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(turno.estado)) return 'Este turno ya terminó';
+/** Estados en los que la posición en la fila ya no importa. */
+const TEXTO_POR_ESTADO: Partial<Record<EstadoTurno, string>> = {
+  LLAMADO: 'Acércate a la ventanilla',
+  EN_ATENCION: 'Te están atendiendo',
+  ATENDIDO: 'Este turno ya terminó',
+  CANCELADO: 'Este turno ya terminó',
+  AUSENTE: 'Este turno ya terminó',
+};
+
+function textoEspera(minutos: number | null | undefined): string {
+  return typeof minutos === 'number' ? ` · unos ${Math.max(1, Math.ceil(minutos))} min` : '';
+}
+
+function textoPersonas(turno: Turno): string {
   if (turno.personasDelante === null) return 'Calculando tu posición…';
   if (turno.personasDelante === 0) return 'Eres el siguiente';
-  const espera = typeof turno.esperaEstimadaMin === 'number' ? ` · unos ${Math.max(1, Math.ceil(turno.esperaEstimadaMin))} min` : '';
-  return `${turno.personasDelante} ${turno.personasDelante === 1 ? 'persona' : 'personas'} delante${espera}`;
+  return `${turno.personasDelante} ${turno.personasDelante === 1 ? 'persona' : 'personas'} delante${textoEspera(turno.esperaEstimadaMin)}`;
+}
+
+function textoPosicion(turno: Turno): string {
+  return TEXTO_POR_ESTADO[turno.estado] ?? textoPersonas(turno);
+}
+
+function estadoVisible(turno: Turno, confirmado: boolean) {
+  return turno.estado === 'PROXIMO' && confirmado ? PROXIMO_CONFIRMADO : ESTADOS[turno.estado];
 }
 
 /**
@@ -43,15 +60,10 @@ export function TarjetaTurno({
   lugar?: string;
   confirmado?: boolean;
 }) {
-  const estado = turno.estado === 'PROXIMO' && confirmado ? PROXIMO_CONFIRMADO : ESTADOS[turno.estado];
+  const estado = estadoVisible(turno, confirmado);
   return (
     <View style={estilos.tarjeta} accessible accessibilityLabel={`${titulo} ${turno.codigo ?? ''}, ${estado.texto}`}>
-      {/* El número del turno se ve como el logo: placa verde con letras doradas (5,4:1). */}
-      <View style={estilos.placa}>
-        <Text style={estilos.titulo}>{titulo}</Text>
-        <Text style={estilos.codigo}>{turno.codigo ?? '—'}</Text>
-        {lugar && <Text style={estilos.lugar}>{lugar}</Text>}
-      </View>
+      <PlacaTurno titulo={titulo} codigo={turno.codigo} lugar={lugar} />
       <View style={estilos.cuerpo}>
         <View style={estilos.fila}>
           <Text style={[estilos.chip, { backgroundColor: estado.color }]}>● {estado.texto}</Text>
@@ -65,6 +77,17 @@ export function TarjetaTurno({
         </Text>
         {desactualizado && <Text style={estilos.aviso}>Sin conexión: último estado conocido de las {desactualizado}</Text>}
       </View>
+    </View>
+  );
+}
+
+/** El número del turno se ve como el logo: placa verde con letras doradas (5,4:1). */
+function PlacaTurno({ titulo, codigo, lugar }: { titulo: string; codigo: Turno['codigo']; lugar?: string }) {
+  return (
+    <View style={estilos.placa}>
+      <Text style={estilos.titulo}>{titulo}</Text>
+      <Text style={estilos.codigo}>{codigo ?? '—'}</Text>
+      {lugar && <Text style={estilos.lugar}>{lugar}</Text>}
     </View>
   );
 }

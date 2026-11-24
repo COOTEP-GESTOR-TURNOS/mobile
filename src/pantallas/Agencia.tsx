@@ -17,26 +17,25 @@ import { Desplegable } from '../componentes/Desplegable';
 import { useSesion } from '../sesion';
 import { colores, espacio, objetivoTactil, radio, texto } from '../tema/tokens';
 
-/**
- * RF-17 en el teléfono: las mismas acciones de la web. El directivo ajusta su agencia; el
- * superadministrador elige cualquiera, la abre o la cierra y cambia los parámetros globales.
- */
-export function Agencia() {
+type Mensaje = { tipo: 'exito' | 'error'; texto: string } | null;
+type Ejecutar = (operacion: () => Promise<VistaAgencia | null>, exito: string) => Promise<void>;
+type AccionJornada = (operacion: () => Promise<string>) => Promise<void>;
+
+/** Las agencias que puede gestionar: todas para el superadministrador; las propias para el directivo. */
+function useAmbitoGestion() {
   const { usuario } = useSesion();
+  const { agencias } = useCatalogo();
   const roles = usuario?.roles ?? [];
   const superadmin = roles.some((r) => r.rol === 'SUPERADMIN');
   const propias = roles.filter((r) => r.rol === 'ADMIN_AGENCIA').map((r) => r.agenciaId!);
-  const { agencias } = useCatalogo();
-  const opciones = superadmin ? agencias : agencias.filter((a) => propias.includes(a.id));
+  return { superadmin, propias, opciones: superadmin ? agencias : agencias.filter((a) => propias.includes(a.id)) };
+}
 
-  const [agenciaId, setAgenciaId] = useState(propias[0] ?? '');
+/** La vista de la agencia elegida, las acciones que la cambian y el mensaje con el resultado. */
+function useVistaAgencia(agenciaId: string) {
   const [vista, setVista] = useState<VistaAgencia | null>(null);
-  const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
+  const [mensaje, setMensaje] = useState<Mensaje>(null);
   const [recarga, setRecarga] = useState(0);
-
-  useEffect(() => {
-    if (!agenciaId && opciones.length > 0) setAgenciaId(opciones[0].id);
-  }, [agenciaId, opciones]);
 
   useEffect(() => {
     if (!agenciaId) return;
@@ -50,7 +49,7 @@ export function Agencia() {
     };
   }, [agenciaId, recarga]);
 
-  const ejecutar = useCallback(async (operacion: () => Promise<VistaAgencia | null>, exito: string) => {
+  const ejecutar = useCallback<Ejecutar>(async (operacion, exito) => {
     setMensaje(null);
     try {
       const v = await operacion();
@@ -73,8 +72,96 @@ export function Agencia() {
     }
   }
 
+  return { vista, mensaje, ejecutar, accionJornada };
+}
+
+/**
+ * RF-17 en el teléfono: las mismas acciones de la web. El directivo ajusta su agencia; el
+ * superadministrador elige cualquiera, la abre o la cierra y cambia los parámetros globales.
+ */
+export function Agencia() {
+  const { superadmin, propias, opciones } = useAmbitoGestion();
+  const [agenciaId, setAgenciaId] = useState(propias[0] ?? '');
+  const { vista, mensaje, ejecutar, accionJornada } = useVistaAgencia(agenciaId);
+
+  useEffect(() => {
+    if (!agenciaId && opciones.length > 0) setAgenciaId(opciones[0].id);
+  }, [agenciaId, opciones]);
+
+  return (
+    <View>
+      <Text style={estilos.titulo}>{superadmin ? 'Agencias' : 'Mi agencia'}</Text>
+      {opciones.length > 1 && (
+        <Desplegable
+          titulo="Agencia"
+          opciones={opciones.map((a) => ({ id: a.id, nombre: a.nombre, detalle: a.activa ? undefined : 'Cerrada' }))}
+          valor={agenciaId}
+          onCambio={setAgenciaId}
+        />
+      )}
+      {mensaje && <Aviso tipo={mensaje.tipo}>{mensaje.texto}</Aviso>}
+      {vista && <DetalleAgencia vista={vista} superadmin={superadmin} ejecutar={ejecutar} accionJornada={accionJornada} />}
+      {superadmin && <Globales />}
+    </View>
+  );
+}
+
+function DetalleAgencia({ vista, superadmin, ejecutar, accionJornada }: { vista: VistaAgencia; superadmin: boolean; ejecutar: Ejecutar; accionJornada: AccionJornada }) {
+  return (
+    <>
+      <EstadoAgencia vista={vista} />
+      <BotonJornada vista={vista} accionJornada={accionJornada} />
+      {superadmin && <BotonAgencia vista={vista} ejecutar={ejecutar} />}
+
+      <Text style={estilos.seccion}>Servicios y ventanillas</Text>
+      {vista.servicios.map((s) => (
+        <Servicio
+          key={s.servicioId}
+          servicio={s}
+          alCambiar={(cambios, exito) => ejecutar(() => agenciasAdminApi.actualizarServicio(vista.id, s.servicioId, cambios), exito)}
+        />
+      ))}
+
+      <Text style={estilos.seccion}>Horario y reglas</Text>
+      {vista.parametros.map((p) => (
+        <Parametro
+          key={p.clave}
+          parametro={p}
+          editable={p.editableEnAgencia}
+          alGuardar={(valor) => ejecutar(() => agenciasAdminApi.fijarParametro(vista.id, p.clave, valor), `${p.nombre}: ${valor}.`)}
+          alRestablecer={() => ejecutar(() => agenciasAdminApi.restablecerParametro(vista.id, p.clave), `${p.nombre} vuelve al valor global.`)}
+        />
+      ))}
+    </>
+  );
+}
+
+function etiquetaEstado(vista: VistaAgencia): string {
+  if (!vista.activa) return 'cerrada';
+  return vista.jornadaCerrada ? 'jornada cerrada' : 'atendiendo';
+}
+
+function EstadoAgencia({ vista }: { vista: VistaAgencia }) {
+  return (
+    <>
+      <Text style={estilos.subtitulo}>
+        {vista.nombre} · {etiquetaEstado(vista)}
+      </Text>
+      {vista.activa && (
+        <Text style={estilos.nota}>
+          {vista.jornadaCerrada
+            ? 'Hoy ya no recibe turnos. Si la cerraste por error, reábrela: los turnos cancelados no vuelven.'
+            : 'La jornada se cierra sola a la hora de cierre. Ciérrala antes si la agencia deja de atender hoy.'}
+        </Text>
+      )}
+    </>
+  );
+}
+
+/** Cerrar la jornada antes de la hora, o reabrirla si se cerró por error (con la agencia abierta). */
+function BotonJornada({ vista: v, accionJornada }: { vista: VistaAgencia; accionJornada: AccionJornada }) {
   /** RN-13: cierra la jornada antes de la hora; cancela los turnos en espera y avisa a cada asociado. */
-  function cerrarJornada(v: VistaAgencia) {
+  function cerrarJornada() {
     Alert.alert('Cerrar la jornada', `Hoy ${v.nombre} no recibirá más turnos; los que están en espera se cancelan y cada asociado recibe el aviso.`, [
       { text: 'Volver', style: 'cancel' },
       {
@@ -90,85 +177,36 @@ export function Agencia() {
   }
 
   /** Deshace un cierre anticipado; los turnos ya cancelados no vuelven. */
-  function reabrirJornada(v: VistaAgencia) {
+  function reabrirJornada() {
     void accionJornada(async () => {
       await agenciasAdminApi.reabrirJornada(v.id);
       return 'Jornada reabierta: la agencia vuelve a recibir turnos en su horario.';
     });
   }
 
-  return (
-    <View>
-      <Text style={estilos.titulo}>{superadmin ? 'Agencias' : 'Mi agencia'}</Text>
-      {opciones.length > 1 && (
-        <Desplegable
-          titulo="Agencia"
-          opciones={opciones.map((a) => ({ id: a.id, nombre: a.nombre, detalle: a.activa ? undefined : 'Cerrada' }))}
-          valor={agenciaId}
-          onCambio={setAgenciaId}
-        />
-      )}
-      {mensaje && <Aviso tipo={mensaje.tipo}>{mensaje.texto}</Aviso>}
-      {vista && (
-        <>
-          <Text style={estilos.subtitulo}>
-            {vista.nombre} · {!vista.activa ? 'cerrada' : vista.jornadaCerrada ? 'jornada cerrada' : 'atendiendo'}
-          </Text>
-          {vista.activa && (
-            <Text style={estilos.nota}>
-              {vista.jornadaCerrada
-                ? 'Hoy ya no recibe turnos. Si la cerraste por error, reábrela: los turnos cancelados no vuelven.'
-                : 'La jornada se cierra sola a la hora de cierre. Ciérrala antes si la agencia deja de atender hoy.'}
-            </Text>
-          )}
-          {vista.jornadaCerrada ? (
-            vista.activa && <Boton titulo="Reabrir la jornada" variante="secundario" onPress={() => reabrirJornada(vista)} />
-          ) : (
-            <Boton titulo="Cerrar la jornada" variante="peligro" onPress={() => cerrarJornada(vista)} />
-          )}
-          {superadmin && (
-            <Boton
-              titulo={vista.activa ? 'Cerrar agencia' : 'Abrir agencia'}
-              variante={vista.activa ? 'peligro' : 'secundario'}
-              onPress={() => {
-                const cambiar = () =>
-                  void ejecutar(
-                    () => agenciasAdminApi.actualizarAgencia(vista.id, !vista.activa),
-                    vista.activa ? 'Agencia cerrada: ya no recibe turnos y los de hoy en espera se cancelaron.' : 'Agencia abierta.',
-                  );
-                if (!vista.activa) return cambiar();
-                Alert.alert('Cerrar agencia', `${vista.nombre} deja de recibir turnos y los que están en espera hoy se cancelan.`, [
-                  { text: 'Volver', style: 'cancel' },
-                  { text: 'Cerrar agencia', style: 'destructive', onPress: cambiar },
-                ]);
-              }}
-            />
-          )}
+  if (!v.jornadaCerrada) return <Boton titulo="Cerrar la jornada" variante="peligro" onPress={cerrarJornada} />;
+  if (!v.activa) return null;
+  return <Boton titulo="Reabrir la jornada" variante="secundario" onPress={reabrirJornada} />;
+}
 
-          <Text style={estilos.seccion}>Servicios y ventanillas</Text>
-          {vista.servicios.map((s) => (
-            <Servicio
-              key={s.servicioId}
-              servicio={s}
-              alCambiar={(cambios, exito) => ejecutar(() => agenciasAdminApi.actualizarServicio(vista.id, s.servicioId, cambios), exito)}
-            />
-          ))}
+/** Solo el superadministrador abre o cierra la agencia; cerrarla pide confirmación. */
+function BotonAgencia({ vista, ejecutar }: { vista: VistaAgencia; ejecutar: Ejecutar }) {
+  function cambiar() {
+    void ejecutar(
+      () => agenciasAdminApi.actualizarAgencia(vista.id, !vista.activa),
+      vista.activa ? 'Agencia cerrada: ya no recibe turnos y los de hoy en espera se cancelaron.' : 'Agencia abierta.',
+    );
+  }
 
-          <Text style={estilos.seccion}>Horario y reglas</Text>
-          {vista.parametros.map((p) => (
-            <Parametro
-              key={p.clave}
-              parametro={p}
-              editable={p.editableEnAgencia}
-              alGuardar={(valor) => ejecutar(() => agenciasAdminApi.fijarParametro(vista.id, p.clave, valor), `${p.nombre}: ${valor}.`)}
-              alRestablecer={() => ejecutar(() => agenciasAdminApi.restablecerParametro(vista.id, p.clave), `${p.nombre} vuelve al valor global.`)}
-            />
-          ))}
-        </>
-      )}
-      {superadmin && <Globales />}
-    </View>
-  );
+  function alPulsar() {
+    if (!vista.activa) return cambiar();
+    Alert.alert('Cerrar agencia', `${vista.nombre} deja de recibir turnos y los que están en espera hoy se cancelan.`, [
+      { text: 'Volver', style: 'cancel' },
+      { text: 'Cerrar agencia', style: 'destructive', onPress: cambiar },
+    ]);
+  }
+
+  return <Boton titulo={vista.activa ? 'Cerrar agencia' : 'Abrir agencia'} variante={vista.activa ? 'peligro' : 'secundario'} onPress={alPulsar} />;
 }
 
 function Servicio({ servicio: s, alCambiar }: { servicio: ServicioAgencia; alCambiar: (c: { ventanillas?: number; activo?: boolean }, exito: string) => Promise<void> }) {
@@ -206,6 +244,14 @@ function Paso({ texto: signo, etiqueta, deshabilitado, onPress }: { texto: strin
   );
 }
 
+function etiquetaParametro(p: VistaParametro): string {
+  return `${p.nombre}${p.unidad ? ` (${p.unidad})` : ''}`;
+}
+
+function ayudaParametro(p: VistaParametro, editable: boolean): string {
+  return editable ? `${p.descripcion}. ${TEXTO_ORIGEN[p.origen]}.` : 'Lo define el superadministrador para todas las agencias.';
+}
+
 function Parametro({
   parametro: p,
   editable,
@@ -223,20 +269,37 @@ function Parametro({
   return (
     <View style={estilos.tarjeta}>
       <Campo
-        etiqueta={`${p.nombre}${p.unidad ? ` (${p.unidad})` : ''}`}
+        etiqueta={etiquetaParametro(p)}
         value={valor}
         onChangeText={setValor}
         editable={editable}
         keyboardType={p.tipo === 'entero' ? 'number-pad' : 'numbers-and-punctuation'}
         error={error}
-        ayuda={editable ? `${p.descripcion}. ${TEXTO_ORIGEN[p.origen]}.` : 'Lo define el superadministrador para todas las agencias.'}
+        ayuda={ayudaParametro(p, editable)}
       />
-      {editable && (
-        <View style={[estilos.fila, { justifyContent: 'flex-start', gap: espacio[3] }]}>
-          <Boton titulo="Guardar" variante="secundario" deshabilitado={valor === p.valor || Boolean(error)} onPress={() => void alGuardar(valor)} />
-          {alRestablecer && p.origen === 'AGENCIA' && <Boton titulo="Usar el global" variante="secundario" onPress={() => void alRestablecer()} />}
-        </View>
-      )}
+      {editable && <AccionesParametro parametro={p} valor={valor} error={error} alGuardar={alGuardar} alRestablecer={alRestablecer} />}
+    </View>
+  );
+}
+
+/** «Usar el global» solo aparece cuando la agencia tiene un valor propio. */
+function AccionesParametro({
+  parametro: p,
+  valor,
+  error,
+  alGuardar,
+  alRestablecer,
+}: {
+  parametro: VistaParametro;
+  valor: string;
+  error: string | null;
+  alGuardar: (valor: string) => Promise<void>;
+  alRestablecer?: () => Promise<void>;
+}) {
+  return (
+    <View style={[estilos.fila, { justifyContent: 'flex-start', gap: espacio[3] }]}>
+      <Boton titulo="Guardar" variante="secundario" deshabilitado={valor === p.valor || Boolean(error)} onPress={() => void alGuardar(valor)} />
+      {alRestablecer && p.origen === 'AGENCIA' && <Boton titulo="Usar el global" variante="secundario" onPress={() => void alRestablecer()} />}
     </View>
   );
 }

@@ -81,7 +81,16 @@ export function errorDeFecha(texto: string, hoy = new Date()): string | null {
   if (!partes) return 'Escríbela así: 1985-04-23 (año-mes-día)';
   const [anio, mes, dia] = partes.slice(1).map(Number);
   const fecha = new Date(Date.UTC(anio, mes - 1, dia));
-  if (fecha.getUTCFullYear() !== anio || fecha.getUTCMonth() !== mes - 1 || fecha.getUTCDate() !== dia) return 'Esa fecha no existe';
-  if (anio < 1900 || fecha.getTime() > hoy.getTime()) return 'Revisa el año: la fecha no puede ser futura';
+  if (!esLaMismaFecha(fecha, anio, mes, dia)) return 'Esa fecha no existe';
+  if (fueraDeRango(fecha, anio, hoy)) return 'Revisa el año: la fecha no puede ser futura';
   return null;
+}
+
+/** Date corrige fechas imposibles (31 de febrero pasa a marzo): si cambió, la fecha no existe. */
+function esLaMismaFecha(fecha: Date, anio: number, mes: number, dia: number): boolean {
+  return fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia;
+}
+
+function fueraDeRango(fecha: Date, anio: number, hoy: Date): boolean {
+  return anio < 1900 || fecha.getTime() > hoy.getTime();
 }

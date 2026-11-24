@@ -1,19 +1,23 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 import { colores, espacio, objetivoTactil, radio, texto } from '../tema/tokens';
 
+type Variante = 'primario' | 'secundario' | 'peligro';
+
 interface Props {
   titulo: string;
   onPress: () => void;
   cargando?: boolean;
-  variante?: 'primario' | 'secundario' | 'peligro';
+  variante?: Variante;
   deshabilitado?: boolean;
 }
+
+const COLOR_TEXTO: Record<Variante, string> = { primario: '#FFFFFF', secundario: colores.primario, peligro: colores.error };
 
 /** Microinteracción: mientras carga muestra un indicador y no acepta otro toque. */
 export function Boton({ titulo, onPress, cargando = false, variante = 'primario', deshabilitado = false }: Props) {
   const inactivo = cargando || deshabilitado;
   const primario = variante === 'primario';
-  const colorTexto = primario ? '#FFFFFF' : variante === 'peligro' ? colores.error : colores.primario;
+  const colorTexto = COLOR_TEXTO[variante];
   return (
     <Pressable
       accessibilityRole="button"

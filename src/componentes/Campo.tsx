@@ -25,13 +25,24 @@ export function Campo({ etiqueta, ayuda, error, clave = false, style, ...entrada
         placeholderTextColor={colores.textoSecundario}
         {...entrada}
       />
-      {(error || ayuda) && <Text style={[estilos.ayuda, error ? { color: colores.error } : null]}>{error ?? ayuda}</Text>}
-      {clave && (
-        <Pressable onPress={() => setVisible((v) => !v)} accessibilityRole="button" style={estilos.mostrar}>
-          <Text style={estilos.textoMostrar}>{visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}</Text>
-        </Pressable>
-      )}
+      <AyudaCampo error={error} ayuda={ayuda} />
+      {clave && <MostrarClave visible={visible} alternar={() => setVisible((v) => !v)} />}
     </View>
+  );
+}
+
+/** Debajo del campo: el error si lo hay; si no, la ayuda. */
+function AyudaCampo({ error, ayuda }: { error?: string | null; ayuda?: string }) {
+  const mensaje = error || ayuda;
+  if (!mensaje) return null;
+  return <Text style={[estilos.ayuda, error ? { color: colores.error } : null]}>{mensaje}</Text>;
+}
+
+function MostrarClave({ visible, alternar }: { visible: boolean; alternar: () => void }) {
+  return (
+    <Pressable onPress={alternar} accessibilityRole="button" style={estilos.mostrar}>
+      <Text style={estilos.textoMostrar}>{visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}</Text>
+    </Pressable>
   );
 }
 
