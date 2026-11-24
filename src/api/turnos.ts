@@ -65,14 +65,26 @@ export function mensajeTurnoActivo(t: Pick<Turno, 'codigo' | 'estado'>, lugar?: 
  * Aviso para el asociado cuando su turno cambia por algo que él no hizo (RN-10, RN-11): la
  * pantalla vuelve al formulario y sin este texto no sabría por qué.
  */
-export function avisoDeCambio(t: Pick<Turno, 'estado' | 'codigo' | 'motivo'> & Partial<Pick<Turno, 'confirmado'>>): string | null {
-  const codigo = t.codigo ? `Tu turno ${t.codigo}` : 'Tu turno';
-  if (t.estado === 'PROXIMO' && t.confirmado) return null; // ya confirmó: no se le pide otra vez
-  if (t.estado === 'PROXIMO') return `${codigo} está cerca. Confirma que vas para no perderlo.`;
-  if (t.estado === 'LLAMADO') return `${codigo} fue llamado. Acércate a la ventanilla.`;
-  if (t.estado === 'AUSENTE' && t.motivo === 'SIN_CONFIRMAR') return `${codigo} quedó ausente porque no confirmaste a tiempo. Puedes pedir uno nuevo.`;
-  if (t.estado === 'AUSENTE') return `${codigo} quedó ausente porque no te presentaste a la ventanilla. Puedes pedir uno nuevo.`;
-  if (t.estado === 'CANCELADO' && t.motivo === 'CIERRE_AGENCIA')
-    return `${codigo} se canceló porque la agencia cerró la jornada. Puedes pedir uno en otra agencia o mañana.`;
-  return null;
+type CambioTurno = Pick<Turno, 'estado' | 'codigo' | 'motivo'> & Partial<Pick<Turno, 'confirmado'>>;
+
+/** Reglas en orden: gana la primera que aplica. `texto` recibe «Tu turno C-014» (o «Tu turno»). */
+const AVISOS: { aplica: (t: CambioTurno) => boolean; texto: (codigo: string) => string | null }[] = [
+  // Ya confirmó: no se le pide otra vez.
+  { aplica: (t) => t.estado === 'PROXIMO' && Boolean(t.confirmado), texto: () => null },
+  { aplica: (t) => t.estado === 'PROXIMO', texto: (c) => `${c} está cerca. Confirma que vas para no perderlo.` },
+  { aplica: (t) => t.estado === 'LLAMADO', texto: (c) => `${c} fue llamado. Acércate a la ventanilla.` },
+  {
+    aplica: (t) => t.estado === 'AUSENTE' && t.motivo === 'SIN_CONFIRMAR',
+    texto: (c) => `${c} quedó ausente porque no confirmaste a tiempo. Puedes pedir uno nuevo.`,
+  },
+  { aplica: (t) => t.estado === 'AUSENTE', texto: (c) => `${c} quedó ausente porque no te presentaste a la ventanilla. Puedes pedir uno nuevo.` },
+  {
+    aplica: (t) => t.estado === 'CANCELADO' && t.motivo === 'CIERRE_AGENCIA',
+    texto: (c) => `${c} se canceló porque la agencia cerró la jornada. Puedes pedir uno en otra agencia o mañana.`,
+  },
+];
+
+export function avisoDeCambio(t: CambioTurno): string | null {
+  const regla = AVISOS.find((r) => r.aplica(t));
+  return regla ? regla.texto(t.codigo ? `Tu turno ${t.codigo}` : 'Tu turno') : null;
 }

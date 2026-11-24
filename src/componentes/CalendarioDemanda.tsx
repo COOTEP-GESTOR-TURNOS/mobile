@@ -27,10 +27,16 @@ interface Props {
   alcance?: string;
 }
 
+/** El día del detalle: el elegido si es de este mes; si no, hoy (o el 1 del mes). */
+function diaVisible(datos: DatosCalendario | null, mes: string, hoy: string, fechaElegida: string): DiaDemanda | undefined {
+  const fechaInicial = hoy.startsWith(mes) ? hoy : `${mes}-01`;
+  const fecha = fechaElegida.startsWith(mes) ? fechaElegida : fechaInicial;
+  return datos?.dias.find((item) => item.fecha === fecha);
+}
+
 export function CalendarioDemanda({ hoy, mes, datos, cambiarMes, alcance }: Props) {
   const [fechaElegida, setFechaElegida] = useState('');
-  const fechaInicial = hoy.startsWith(mes) ? hoy : `${mes}-01`;
-  const dia = datos?.dias.find((item) => item.fecha === (fechaElegida.startsWith(mes) ? fechaElegida : fechaInicial));
+  const dia = diaVisible(datos, mes, hoy, fechaElegida);
 
   function irAMes(nuevoMes: string) {
     setFechaElegida('');
@@ -41,24 +47,42 @@ export function CalendarioDemanda({ hoy, mes, datos, cambiarMes, alcance }: Prop
     <View style={estilos.contenedor}>
       <Text accessibilityRole="header" style={estilos.titulo}>Demanda de turnos</Text>
       {alcance ? <Text style={estilos.nota}>{alcance}</Text> : null}
-      <View style={estilos.navegacion}>
-        <MesBoton icono="chevron-back" etiqueta="Mes anterior" onPress={() => irAMes(mesDesplazado(mes, -1))} />
-        <Text style={estilos.mes} accessibilityLiveRegion="polite">{nombreMes(mes)}</Text>
-        <MesBoton icono="today-outline" etiqueta="Ir al día de hoy" onPress={() => irAMes(hoy.slice(0, 7))} />
-        <MesBoton icono="chevron-forward" etiqueta="Mes siguiente" onPress={() => irAMes(mesDesplazado(mes, 1))} />
-      </View>
-      {datos?.estadoPronostico === 'HISTORIAL_INSUFICIENTE' && <Aviso tipo="info">Historial insuficiente para estimar la demanda.</Aviso>}
-      {datos?.estadoPronostico === 'INCOMPLETO' && <Aviso tipo="info">Pronóstico incompleto. Faltan estimaciones de agencias hábiles.</Aviso>}
+      <NavegacionMes mes={mes} hoy={hoy} irAMes={irAMes} />
+      <AvisosCalendario estado={datos?.estadoPronostico} />
       {datos && (
         <Mes dias={datos.dias} mes={mes} hoy={hoy} fechaElegida={dia?.fecha} elegir={setFechaElegida} />
       )}
-      {dia && (
-        <View style={estilos.detalle} accessibilityLiveRegion="polite">
-          <Text accessibilityRole="header" style={estilos.textoDetalle}>{nombreFecha(dia.fecha)}</Text>
-          <Text style={estilos.nota}>{resumenDia(dia, hoy)}</Text>
-          {[...new Set(marcasDia(dia))].map((marca) => <Text key={marca} style={estilos.marca}>{marca}</Text>)}
-        </View>
-      )}
+      {dia && <DetalleDia dia={dia} hoy={hoy} />}
+    </View>
+  );
+}
+
+function NavegacionMes({ mes, hoy, irAMes }: { mes: string; hoy: string; irAMes: (mes: string) => void }) {
+  return (
+    <View style={estilos.navegacion}>
+      <MesBoton icono="chevron-back" etiqueta="Mes anterior" onPress={() => irAMes(mesDesplazado(mes, -1))} />
+      <Text style={estilos.mes} accessibilityLiveRegion="polite">{nombreMes(mes)}</Text>
+      <MesBoton icono="today-outline" etiqueta="Ir al día de hoy" onPress={() => irAMes(hoy.slice(0, 7))} />
+      <MesBoton icono="chevron-forward" etiqueta="Mes siguiente" onPress={() => irAMes(mesDesplazado(mes, 1))} />
+    </View>
+  );
+}
+
+function AvisosCalendario({ estado }: { estado?: DatosCalendario['estadoPronostico'] }) {
+  return (
+    <>
+      {estado === 'HISTORIAL_INSUFICIENTE' && <Aviso tipo="info">Historial insuficiente para estimar la demanda.</Aviso>}
+      {estado === 'INCOMPLETO' && <Aviso tipo="info">Pronóstico incompleto. Faltan estimaciones de agencias hábiles.</Aviso>}
+    </>
+  );
+}
+
+function DetalleDia({ dia, hoy }: { dia: DiaDemanda; hoy: string }) {
+  return (
+    <View style={estilos.detalle} accessibilityLiveRegion="polite">
+      <Text accessibilityRole="header" style={estilos.textoDetalle}>{nombreFecha(dia.fecha)}</Text>
+      <Text style={estilos.nota}>{resumenDia(dia, hoy)}</Text>
+      {[...new Set(marcasDia(dia))].map((marca) => <Text key={marca} style={estilos.marca}>{marca}</Text>)}
     </View>
   );
 }
@@ -93,8 +117,12 @@ function Mes({ dias, mes, hoy, fechaElegida, elegir }: { dias: DiaDemanda[]; mes
   );
 }
 
+/** El punto del día: festivo, vencimiento de crédito o evento de la agencia. */
+function tieneMarca(dia: DiaDemanda): boolean {
+  return Boolean(dia.festivoNacional) || dia.festivosPutumayo.length > 0 || dia.vencimientoCredito || dia.eventos.length > 0;
+}
+
 function DiaCalendario({ dia, hoy, seleccionado, seleccionar }: { dia: DiaDemanda; hoy: string; seleccionado: boolean; seleccionar: () => void }) {
-  const hayMarca = dia.festivoNacional || dia.festivosPutumayo.length > 0 || dia.vencimientoCredito || dia.eventos.length > 0;
   const noHabil = dia.diaHabil === false;
   const etiqueta = [nombreFecha(dia.fecha), resumenDia(dia, hoy), ...marcasDia(dia)].join(', ');
   return (
@@ -107,17 +135,28 @@ function DiaCalendario({ dia, hoy, seleccionado, seleccionar }: { dia: DiaDemand
     >
       <View style={estilos.numeroDia}>
         <Text style={estilos.diaTexto}>{Number(dia.fecha.slice(-2))}</Text>
-        {hayMarca && <View style={estilos.punto} />}
+        {tieneMarca(dia) && <View style={estilos.punto} />}
       </View>
-      {dia.turnosRegistrados !== null && (
-        <><Text style={estilos.cifra}>{dia.turnosRegistrados}</Text><Text style={estilos.cifraTipo}>Reg.</Text></>
-      )}
-      {noHabil && <Text style={estilos.cifraTipo}>No hábil</Text>}
-      {!noHabil && dia.turnosEstimados !== null && (
-        <><Text style={estilos.cifra}>{dia.turnosEstimados}</Text><Text style={estilos.cifraTipo}>Est.</Text></>
-      )}
-      {!noHabil && dia.nivelDemanda && <Text style={[estilos.cifraTipo, { color: NIVEL[dia.nivelDemanda] }]}>{nombreNivel(dia.nivelDemanda)}</Text>}
+      <Cifra valor={dia.turnosRegistrados} tipo="Reg." />
+      {noHabil ? <Text style={estilos.cifraTipo}>No hábil</Text> : <EstimacionDia dia={dia} />}
     </Pressable>
+  );
+}
+
+function Cifra({ valor, tipo }: { valor: number | null; tipo: string }) {
+  if (valor === null) return null;
+  return (
+    <><Text style={estilos.cifra}>{valor}</Text><Text style={estilos.cifraTipo}>{tipo}</Text></>
+  );
+}
+
+/** Solo los días hábiles tienen estimación y nivel de demanda. */
+function EstimacionDia({ dia }: { dia: DiaDemanda }) {
+  return (
+    <>
+      <Cifra valor={dia.turnosEstimados} tipo="Est." />
+      {dia.nivelDemanda && <Text style={[estilos.cifraTipo, { color: NIVEL[dia.nivelDemanda] }]}>{nombreNivel(dia.nivelDemanda)}</Text>}
+    </>
   );
 }
 

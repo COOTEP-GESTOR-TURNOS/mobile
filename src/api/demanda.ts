@@ -65,15 +65,21 @@ export const nombreFecha = (fecha: string): string => `${Number(fecha.slice(8, 1
 export const huecosDelMes = (mes: string): number => (new Date(`${mes}-01T00:00:00Z`).getUTCDay() + 6) % 7;
 export const nombreNivel = (nivel: NivelDemanda): string => niveles[nivel];
 
+/** La estimación solo se muestra en días hábiles que la tienen. */
+function cifraEstimada(dia: DiaDemanda): string[] {
+  if (dia.diaHabil === false || dia.turnosEstimados === null) return [];
+  const nivel = dia.nivelDemanda ? ` · Demanda ${nombreNivel(dia.nivelDemanda).toLowerCase()}` : '';
+  return [`${dia.turnosEstimados.toLocaleString('es-CO')} turnos estimados${nivel}`];
+}
+
 export function resumenDia(dia: DiaDemanda, hoy: string): string {
-  const cifras: string[] = [];
-  if (dia.diaHabil === false) cifras.push('Día no hábil');
-  if (dia.turnosRegistrados !== null) cifras.push(`${dia.turnosRegistrados.toLocaleString('es-CO')} turnos registrados`);
-  if (dia.diaHabil !== false && dia.turnosEstimados !== null) {
-    const nivel = dia.nivelDemanda ? ` · Demanda ${nombreNivel(dia.nivelDemanda).toLowerCase()}` : '';
-    cifras.push(`${dia.turnosEstimados.toLocaleString('es-CO')} turnos estimados${nivel}`);
-  }
-  return cifras.length ? cifras.join(' · ') : dia.fecha < hoy ? 'Sin historial' : 'Sin pronóstico';
+  const cifras = [
+    ...(dia.diaHabil === false ? ['Día no hábil'] : []),
+    ...(dia.turnosRegistrados !== null ? [`${dia.turnosRegistrados.toLocaleString('es-CO')} turnos registrados`] : []),
+    ...cifraEstimada(dia),
+  ];
+  if (cifras.length) return cifras.join(' · ');
+  return dia.fecha < hoy ? 'Sin historial' : 'Sin pronóstico';
 }
 
 export function marcasDia(dia: DiaDemanda): string[] {

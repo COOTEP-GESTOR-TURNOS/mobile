@@ -47,13 +47,22 @@ export function MiCuenta() {
   );
 }
 
-function Datos({ perfil, alGuardar }: { perfil: Perfil; alGuardar: () => Promise<void> }) {
-  const [datos, setDatos] = useState({
+function datosIniciales(perfil: Perfil) {
+  return {
     nombre: perfil.nombre,
     tipoDocumento: perfil.tipoDocumento ?? ('CC' as TipoDocumento),
     numeroDocumento: perfil.numeroDocumento ?? '',
     fechaNacimiento: perfil.fechaNacimiento ?? '',
-  });
+  };
+}
+
+/** El pasaporte y la cédula de extranjería pueden llevar letras. */
+function tecladoDocumento(tipo: TipoDocumento): 'number-pad' | 'default' {
+  return tipo === 'CC' || tipo === 'TI' ? 'number-pad' : 'default';
+}
+
+function Datos({ perfil, alGuardar }: { perfil: Perfil; alGuardar: () => Promise<void> }) {
+  const [datos, setDatos] = useState(() => datosIniciales(perfil));
   const [mensaje, setMensaje] = useState<Mensaje>(null);
   const [cargando, setCargando] = useState(false);
   const errorFecha = errorDeFecha(datos.fechaNacimiento);
@@ -92,8 +101,7 @@ function Datos({ perfil, alGuardar }: { perfil: Perfil; alGuardar: () => Promise
         etiqueta="Número de documento"
         value={datos.numeroDocumento}
         onChangeText={(numeroDocumento) => setDatos({ ...datos, numeroDocumento })}
-        // El pasaporte y la cédula de extranjería pueden llevar letras.
-        keyboardType={datos.tipoDocumento === 'CC' || datos.tipoDocumento === 'TI' ? 'number-pad' : 'default'}
+        keyboardType={tecladoDocumento(datos.tipoDocumento)}
         autoCapitalize="characters"
       />
       <Campo

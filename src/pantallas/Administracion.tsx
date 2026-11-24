@@ -13,31 +13,29 @@ import { colores, espacio, objetivoTactil, radio, texto } from '../tema/tokens';
 
 const TODOS: Rol[] = ['SUPERADMIN', 'ADMIN_AGENCIA', 'FUNCIONARIO', 'ASOCIADO'];
 
-/**
- * CU-05 y CU-06 en el teléfono: las mismas operaciones del panel web (buscar, crear con su rol,
- * asignar y quitar roles, activar y desactivar). El backend aplica el ámbito de cada administrador.
- */
-export function Administracion() {
+/** Lo que el administrador puede ver y asignar según sus roles (el backend lo vuelve a validar). */
+function useAmbitoAdministracion() {
   const { usuario } = useSesion();
+  const { agencias, error: errorCatalogo } = useCatalogo();
   const roles = usuario?.roles ?? [];
   const superadmin = roles.some((r) => r.rol === 'SUPERADMIN');
   const propias = roles.filter((r) => r.rol === 'ADMIN_AGENCIA').map((r) => r.agenciaId!);
-  const rolesAsignables = superadmin ? TODOS : (['FUNCIONARIO'] as Rol[]);
+  return {
+    usuarioId: usuario?.id,
+    roles,
+    superadmin,
+    propias,
+    agencias,
+    errorCatalogo,
+    rolesAsignables: superadmin ? TODOS : (['FUNCIONARIO'] as Rol[]),
+    agenciasPermitidas: superadmin ? agencias : agencias.filter((a) => propias.includes(a.id)),
+  };
+}
 
-  const { agencias, error: errorCatalogo } = useCatalogo();
-  const [texto_, setTexto] = useState('');
+function useListaUsuarios() {
   const [usuarios, setUsuarios] = useState<FichaUsuario[]>([]);
   const [total, setTotal] = useState(0);
-  const [elegido, setElegido] = useState<FichaUsuario | null>(null);
-  const [creando, setCreando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const agenciasPermitidas = superadmin ? agencias : agencias.filter((a) => propias.includes(a.id));
-  const nombreAgencia = (id?: string) => agencias.find((a) => a.id === id)?.nombre;
-  const describir = (r: AsignacionRol) =>
-    [NOMBRE_ROL[r.rol], nombreAgencia(r.agenciaId), agencias.find((a) => a.id === r.agenciaId)?.servicios.find((s) => s.id === r.servicioId)?.nombre]
-      .filter(Boolean)
-      .join(' · ');
 
   const buscar = useCallback(async (filtro: string) => {
     try {
@@ -52,6 +50,41 @@ export function Administracion() {
   useEffect(() => {
     void buscar('');
   }, [buscar]);
+
+  return { usuarios, total, error, buscar };
+}
+
+function nombreAgencia(agencias: AgenciaCatalogo[], id?: string): string | undefined {
+  return agencias.find((a) => a.id === id)?.nombre;
+}
+
+function nombreServicio(agencias: AgenciaCatalogo[], agenciaId?: string, servicioId?: string): string | undefined {
+  return agencias.find((a) => a.id === agenciaId)?.servicios.find((s) => s.id === servicioId)?.nombre;
+}
+
+/** «Funcionario · Agencia Mocoa · Caja»: el rol con su agencia y su servicio, si los tiene. */
+function describirAsignacion(agencias: AgenciaCatalogo[], r: AsignacionRol): string {
+  return [NOMBRE_ROL[r.rol], nombreAgencia(agencias, r.agenciaId), nombreServicio(agencias, r.agenciaId, r.servicioId)].filter(Boolean).join(' · ');
+}
+
+function tituloAdministracion(superadmin: boolean, propias: string[], agencias: AgenciaCatalogo[]): string {
+  if (superadmin) return 'Control global';
+  return `Administración · ${propias.map((id) => nombreAgencia(agencias, id)).filter(Boolean).join(', ')}`;
+}
+
+/**
+ * CU-05 y CU-06 en el teléfono: las mismas operaciones del panel web (buscar, crear con su rol,
+ * asignar y quitar roles, activar y desactivar). El backend aplica el ámbito de cada administrador.
+ */
+export function Administracion() {
+  const ambitoAdmin = useAmbitoAdministracion();
+  const { roles, agencias, agenciasPermitidas, rolesAsignables } = ambitoAdmin;
+  const { usuarios, total, error, buscar } = useListaUsuarios();
+  const [texto_, setTexto] = useState('');
+  const [elegido, setElegido] = useState<FichaUsuario | null>(null);
+  const [creando, setCreando] = useState(false);
+  const describir = (r: AsignacionRol) => describirAsignacion(agencias, r);
+  const errorVisible = error ?? ambitoAdmin.errorCatalogo;
 
   function actualizado(ficha: FichaUsuario) {
     setElegido(ficha);
@@ -76,7 +109,7 @@ export function Administracion() {
       <Ficha
         ficha={elegido}
         actor={roles}
-        esYo={elegido.id === usuario?.id}
+        esYo={elegido.id === ambitoAdmin.usuarioId}
         agencias={agenciasPermitidas}
         roles={rolesAsignables}
         describir={describir}
@@ -88,24 +121,40 @@ export function Administracion() {
 
   return (
     <View>
-      <Text style={estilos.titulo}>{superadmin ? 'Control global' : `Administración · ${propias.map(nombreAgencia).filter(Boolean).join(', ')}`}</Text>
-      {(error ?? errorCatalogo) && <Aviso>{(error ?? errorCatalogo)!}</Aviso>}
+      <Text style={estilos.titulo}>{tituloAdministracion(ambitoAdmin.superadmin, ambitoAdmin.propias, agencias)}</Text>
+      {errorVisible && <Aviso>{errorVisible}</Aviso>}
       <Boton titulo="Nuevo usuario" onPress={() => setCreando(true)} />
       <Campo etiqueta="Buscar por nombre, correo o documento" value={texto_} onChangeText={setTexto} onSubmitEditing={() => void buscar(texto_)} returnKeyType="search" />
       <Boton titulo="Buscar" variante="secundario" onPress={() => void buscar(texto_)} />
       <Text style={estilos.secundario}>{total} usuarios</Text>
       {usuarios.map((u) => (
-        <Pressable key={u.id} style={estilos.fila} onPress={() => setElegido(u)} accessibilityRole="button" accessibilityLabel={`${u.nombre}, ${u.roles.map(describir).join(', ')}`}>
-          <Text style={estilos.nombre}>
-            {u.nombre}
-            {!u.activo && <Text style={{ color: colores.error }}> · desactivado</Text>}
-          </Text>
-          <Text style={estilos.secundario}>{u.email}</Text>
-          <Text style={estilos.secundario}>{u.roles.map(describir).join(' | ')}</Text>
-        </Pressable>
+        <FilaUsuario key={u.id} usuario={u} describir={describir} elegir={() => setElegido(u)} />
       ))}
     </View>
   );
+}
+
+function FilaUsuario({ usuario: u, describir, elegir }: { usuario: FichaUsuario; describir: (r: AsignacionRol) => string; elegir: () => void }) {
+  return (
+    <Pressable style={estilos.fila} onPress={elegir} accessibilityRole="button" accessibilityLabel={`${u.nombre}, ${u.roles.map(describir).join(', ')}`}>
+      <Text style={estilos.nombre}>
+        {u.nombre}
+        {!u.activo && <Text style={{ color: colores.error }}> · desactivado</Text>}
+      </Text>
+      <Text style={estilos.secundario}>{u.email}</Text>
+      <Text style={estilos.secundario}>{u.roles.map(describir).join(' | ')}</Text>
+    </Pressable>
+  );
+}
+
+/** El administrador de agencia y el funcionario trabajan en una agencia; los demás roles no. */
+function requiereAgencia(rol?: Rol): boolean {
+  return rol === 'ADMIN_AGENCIA' || rol === 'FUNCIONARIO';
+}
+
+/** Al cambiar de rol se conserva la agencia elegida (o la primera) si el nuevo rol la necesita. */
+function asignacionConRol(rol: Rol, valor: AsignacionRol | null, agencias: AgenciaCatalogo[]): AsignacionRol {
+  return { rol, ...(requiereAgencia(rol) ? { agenciaId: valor?.agenciaId ?? agencias[0]?.id } : {}) };
 }
 
 /** valor null: todavía no se eligió rol (al asignar otro rol a un usuario existente). */
@@ -121,37 +170,50 @@ function SelectorAmbito({
   alCambiar: (v: AsignacionRol) => void;
 }) {
   const agencia = agencias.find((a) => a.id === valor?.agenciaId);
-  const conAgencia = valor?.rol === 'ADMIN_AGENCIA' || valor?.rol === 'FUNCIONARIO';
   // Desplegables: cada uno ocupa una línea aunque haya muchas agencias o servicios.
   return (
     <>
-      <Desplegable
-        titulo="Rol"
-        marcador="Elige un rol"
-        opciones={roles.map((r) => ({ id: r, nombre: NOMBRE_ROL[r] }))}
-        valor={valor?.rol}
-        onCambio={(rol) => alCambiar({ rol, ...(rol === 'ADMIN_AGENCIA' || rol === 'FUNCIONARIO' ? { agenciaId: valor?.agenciaId ?? agencias[0]?.id } : {}) })}
-      />
-      {valor && conAgencia && (
-        <Desplegable
-          titulo="Agencia"
-          opciones={agencias.map((a) => ({ id: a.id, nombre: a.nombre, detalle: a.activa ? undefined : 'Cerrada' }))}
-          valor={valor.agenciaId}
-          onCambio={(agenciaId) => alCambiar({ rol: valor.rol, agenciaId })}
-        />
-      )}
-      {valor?.rol === 'FUNCIONARIO' && agencia && (
-        <Desplegable
-          titulo="Servicio"
-          opciones={[
-            { id: '', nombre: 'Todos', detalle: 'Atiende cualquier fila de la agencia' },
-            ...agencia.servicios.map((s) => ({ id: s.id, nombre: s.nombre, detalle: `${s.ventanillas} ${s.ventanillas === 1 ? 'ventanilla' : 'ventanillas'}` })),
-          ]}
-          valor={valor.servicioId ?? ''}
-          onCambio={(servicioId) => alCambiar({ ...valor, servicioId: servicioId || undefined })}
-        />
-      )}
+      <SelectorRol roles={roles} valor={valor} alCambiar={(rol) => alCambiar(asignacionConRol(rol, valor, agencias))} />
+      {valor && requiereAgencia(valor.rol) && <SelectorAgencia agencias={agencias} valor={valor} alCambiar={alCambiar} />}
+      {valor?.rol === 'FUNCIONARIO' && agencia && <SelectorServicio agencia={agencia} valor={valor} alCambiar={alCambiar} />}
     </>
+  );
+}
+
+function SelectorRol({ roles, valor, alCambiar }: { roles: Rol[]; valor: AsignacionRol | null; alCambiar: (rol: Rol) => void }) {
+  return (
+    <Desplegable
+      titulo="Rol"
+      marcador="Elige un rol"
+      opciones={roles.map((r) => ({ id: r, nombre: NOMBRE_ROL[r] }))}
+      valor={valor?.rol}
+      onCambio={alCambiar}
+    />
+  );
+}
+
+function SelectorAgencia({ agencias, valor, alCambiar }: { agencias: AgenciaCatalogo[]; valor: AsignacionRol; alCambiar: (v: AsignacionRol) => void }) {
+  return (
+    <Desplegable
+      titulo="Agencia"
+      opciones={agencias.map((a) => ({ id: a.id, nombre: a.nombre, detalle: a.activa ? undefined : 'Cerrada' }))}
+      valor={valor.agenciaId}
+      onCambio={(agenciaId) => alCambiar({ rol: valor.rol, agenciaId })}
+    />
+  );
+}
+
+function SelectorServicio({ agencia, valor, alCambiar }: { agencia: AgenciaCatalogo; valor: AsignacionRol; alCambiar: (v: AsignacionRol) => void }) {
+  return (
+    <Desplegable
+      titulo="Servicio"
+      opciones={[
+        { id: '', nombre: 'Todos', detalle: 'Atiende cualquier fila de la agencia' },
+        ...agencia.servicios.map((s) => ({ id: s.id, nombre: s.nombre, detalle: `${s.ventanillas} ${s.ventanillas === 1 ? 'ventanilla' : 'ventanillas'}` })),
+      ]}
+      valor={valor.servicioId ?? ''}
+      onCambio={(servicioId) => alCambiar({ ...valor, servicioId: servicioId || undefined })}
+    />
   );
 }
 
@@ -258,9 +320,7 @@ function Ficha({
         </Pressable>
       </View>
       <Text style={estilos.secundario}>{ficha.email}</Text>
-      <Text style={estilos.secundario}>
-        {[ficha.activo ? 'Activo' : 'Desactivado', ficha.tienePassword ? 'contraseña definida' : 'activación pendiente', ficha.mfaActivo ? 'MFA activo' : 'sin MFA'].join(' · ')}
-      </Text>
+      <Text style={estilos.secundario}>{estadoCuenta(ficha)}</Text>
 
       <Text style={estilos.subtitulo}>Roles</Text>
       {ficha.roles.map((r) => (
@@ -290,16 +350,24 @@ function Ficha({
 
       {mensaje && <Aviso tipo={mensaje.tipo}>{mensaje.texto}</Aviso>}
       {!esYo && (
-        <Boton
-          titulo={ficha.activo ? 'Desactivar cuenta' : 'Activar cuenta'}
-          variante={ficha.activo ? 'peligro' : 'secundario'}
+        <BotonEstadoCuenta
+          activo={ficha.activo}
           cargando={accion === 'estado'}
-          onPress={() => void ejecutar('estado', () => administracionApi.activar(ficha.id, !ficha.activo), ficha.activo ? 'Cuenta desactivada.' : 'Cuenta activada.')}
+          alPulsar={() => void ejecutar('estado', () => administracionApi.activar(ficha.id, !ficha.activo), ficha.activo ? 'Cuenta desactivada.' : 'Cuenta activada.')}
         />
       )}
       <Boton titulo="Volver a la lista" variante="secundario" onPress={volver} />
     </View>
   );
+}
+
+/** «Activo · contraseña definida · sin MFA» */
+function estadoCuenta(ficha: FichaUsuario): string {
+  return [ficha.activo ? 'Activo' : 'Desactivado', ficha.tienePassword ? 'contraseña definida' : 'activación pendiente', ficha.mfaActivo ? 'MFA activo' : 'sin MFA'].join(' · ');
+}
+
+function BotonEstadoCuenta({ activo, cargando, alPulsar }: { activo: boolean; cargando: boolean; alPulsar: () => void }) {
+  return <Boton titulo={activo ? 'Desactivar cuenta' : 'Activar cuenta'} variante={activo ? 'peligro' : 'secundario'} cargando={cargando} onPress={alPulsar} />;
 }
 
 const estilos = StyleSheet.create({

@@ -33,6 +33,15 @@ export function useTableroMensual(mes: string, agenciaId: string | null, servici
     };
   }, [agenciaId, clave, mes, servicioId, colaboradorId, revision]);
 
-  const consulta = agenciaId !== null && resultado?.clave === clave ? resultado : null;
-  return { datos: consulta?.datos ?? null, error: consulta?.error ?? null, cargando: agenciaId !== null && !consulta, recargar };
+  return { ...estadoTablero(resultado, clave, agenciaId), recargar };
+}
+
+/** La consulta guardada solo vale si corresponde a la agencia, el mes y los filtros actuales. */
+function consultaVigente(resultado: Consulta | null, clave: string, agenciaId: string | null): Consulta | null {
+  return agenciaId !== null && resultado?.clave === clave ? resultado : null;
+}
+
+function estadoTablero(resultado: Consulta | null, clave: string, agenciaId: string | null) {
+  const consulta = consultaVigente(resultado, clave, agenciaId);
+  return { datos: consulta?.datos ?? null, error: consulta?.error ?? null, cargando: agenciaId !== null && !consulta };
 }
